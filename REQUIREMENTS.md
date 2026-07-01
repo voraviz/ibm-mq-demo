@@ -18,3 +18,9 @@ podman run --secret mqAdminPassword --secret mqAppPassword \
 - enable micrometer metrics
 - Contain config to connect to IBM MQ with hostname, port, username, password and queue name
 - design UI need to be algin with design.md 
+##  UI and API microservices
+- Separate UI and API into 2 applications 
+- Keep existing Quarkus in all-in-one directory
+- API is RESTful using Quarkus. You can still use code in all-in-one-app as reference to remove vue
+- Create the same UI app from vue in existing quarkus code in all-in-one directory
+- Default port for API is 8081 and UI is 8080 
