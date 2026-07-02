@@ -90,10 +90,16 @@ public class MQConsumer {
                 }
             }
         } catch (JMSException e) {
-            // Connection was closed by stop() or shutdown — this is the normal shutdown path
-            if (!closing) {
-                LOG.error("Error: "+e.getLocalizedMessage());
-                // LOG.error("Unexpected error in MQ consumer read loop", e);
+            if (closing) {
+                // Normal shutdown path — stop() or onDestroy() closed the connection.
+                return;
+            }
+            // Unexpected disconnect (e.g. MQ container stopped).
+            // Clean up so isRunning() returns false and start() can be called again
+            // once the broker is back.
+            LOG.warnf("MQ consumer disconnected unexpectedly: %s — marking as stopped", e.getLocalizedMessage());
+            synchronized (this) {
+                closeJmsResources();
             }
         }
     }

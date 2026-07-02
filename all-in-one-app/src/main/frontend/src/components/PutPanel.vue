@@ -54,11 +54,16 @@
         <span class="progress__label">{{ sentCount }} / {{ count }} sent</span>
       </div>
 
+      <!-- MQ disconnected warning -->
+      <div v-if="resolved && !connected" class="notification notification--error">
+        IBM MQ is unreachable — messages cannot be sent.
+      </div>
+
       <!-- Action buttons -->
       <div class="btn-row">
         <button
           class="btn btn--primary"
-          :disabled="sending || !text.trim()"
+          :disabled="sending || !text.trim() || !connected"
           @click="send"
         >
           {{ sending ? 'Sending…' : count > 1 ? `Send ${count} Messages` : 'Send Message' }}
@@ -101,6 +106,11 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
+import { useMQStatus } from '../composables/useMQStatus.js'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
+const { resolved, connected } = useMQStatus()
 
 const text       = ref('')
 const count      = ref(1)
@@ -133,7 +143,7 @@ function clearMessages() {
 }
 
 async function sendOne() {
-  const res = await fetch('/api/messages', {
+  const res = await fetch(`${API_BASE}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: text.value }),
