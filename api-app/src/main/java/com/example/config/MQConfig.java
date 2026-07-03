@@ -6,6 +6,8 @@ import io.smallrye.config.WithName;
 @ConfigMapping(prefix = "ibm.mq")
 public interface MQConfig {
 
+    String connectionList();
+
     String host();
 
     int port();

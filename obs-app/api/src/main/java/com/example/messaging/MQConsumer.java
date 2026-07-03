@@ -85,7 +85,6 @@ public class MQConsumer {
                 }
             } catch (JMSException e) {
                 if (closing) {
-                    // Normal shutdown path — stop() or onDestroy() closed the connection.
                     return;
                 }
                 LOG.warnf("MQ consumer disconnected unexpectedly: %s — reconnecting", e.getLocalizedMessage());

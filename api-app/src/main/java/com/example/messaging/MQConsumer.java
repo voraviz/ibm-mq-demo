@@ -40,12 +40,7 @@ public class MQConsumer {
             return; // already running
         }
         try {
-            jmsConnection = connectionFactory.createConnection();
-            jmsSession    = jmsConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            Queue queue   = jmsSession.createQueue(config.queue());
-            jmsConsumer   = jmsSession.createConsumer(queue);
-            jmsConnection.start();
-
+            openJmsResources();
             listenerThread = Thread.ofPlatform().name("mq-consumer").daemon(true).start(this::readLoop);
             LOG.info("MQ consumer started — listening on queue: " + config.queue());
         } catch (JMSException e) {
@@ -77,8 +72,8 @@ public class MQConsumer {
     // ── private ──────────────────────────────────────────────────────────────
 
     private void readLoop() {
-        try {
-            while (!Thread.currentThread().isInterrupted()) {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
                 jakarta.jms.Message msg = jmsConsumer.receive(500);
                 if (msg == null) {
                     continue; // timeout — check interrupt and loop
@@ -88,25 +83,53 @@ public class MQConsumer {
                     LOG.infof("GET message: %s", text);
                     webSocket.broadcast(text);
                 }
-            }
-        } catch (JMSException e) {
-            if (closing) {
-                // Normal shutdown path — stop() or onDestroy() closed the connection.
-                return;
-            }
-            // Unexpected disconnect (e.g. MQ container stopped).
-            // Clean up so isRunning() returns false and start() can be called again
-            // once the broker is back.
-            LOG.warnf("MQ consumer disconnected unexpectedly: %s — marking as stopped", e.getLocalizedMessage());
-            synchronized (this) {
-                closeJmsResources();
+            } catch (JMSException e) {
+                if (closing) {
+                    // Normal shutdown path — stop() or onDestroy() closed the connection.
+                    return;
+                }
+                LOG.warnf("MQ consumer disconnected unexpectedly: %s — reconnecting", e.getLocalizedMessage());
+                reconnectLoop();
             }
         }
     }
 
+    private void reconnectLoop() {
+        while (!closing && !Thread.currentThread().isInterrupted()) {
+            synchronized (this) {
+                closeJmsResources(false);
+                try {
+                    openJmsResources();
+                    LOG.info("MQ consumer reconnected");
+                    return;
+                } catch (JMSException e) {
+                    LOG.warnf("MQ consumer reconnect failed: %s", e.getLocalizedMessage());
+                }
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private void openJmsResources() throws JMSException {
+        jmsConnection = connectionFactory.createConnection();
+        jmsSession = jmsConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+        Queue queue = jmsSession.createQueue(config.queue());
+        jmsConsumer = jmsSession.createConsumer(queue);
+        jmsConnection.start();
+    }
+
     private void closeJmsResources() {
+        closeJmsResources(true);
+    }
+
+    private void closeJmsResources(boolean interruptListener) {
         closing = true;
-        if (listenerThread != null) {
+        if (interruptListener && listenerThread != null) {
             listenerThread.interrupt();
             listenerThread = null;
         }

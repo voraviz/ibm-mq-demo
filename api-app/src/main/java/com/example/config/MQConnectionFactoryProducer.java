@@ -18,8 +18,7 @@ public class MQConnectionFactoryProducer {
     @ApplicationScoped
     public ConnectionFactory connectionFactory() throws JMSException {
         MQConnectionFactory factory = new MQConnectionFactory();
-        factory.setHostName(config.host());
-        factory.setPort(config.port());
+        factory.setConnectionNameList(config.connectionList());
         factory.setChannel(config.channel());
         factory.setQueueManager(config.queueManager());
         factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
