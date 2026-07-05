@@ -1,7 +1,10 @@
 <template>
   <div class="panel">
     <div class="panel__header">
-      <h2 class="panel__title">Put Message</h2>
+      <div class="panel__title-row">
+        <h2 class="panel__title">Put Message</h2>
+        <span class="count-badge">Session: {{ sessionCount }} | Total: {{ totalCount }}</span>
+      </div>
       <p class="panel__desc">Send one or more messages to the IBM MQ queue.</p>
     </div>
 
@@ -100,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -112,6 +115,9 @@ const sentCount  = ref(0)
 const messages   = ref([])
 const listEl     = ref(null)
 const notification = ref(null)
+const totalCount   = ref(0)
+
+const sessionCount = computed(() => messages.value.length)
 
 let notifTimer   = null
 let cancelSignal = false
@@ -129,6 +135,20 @@ function showNotification(type, message) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+async function fetchTotalCount() {
+  try {
+    const res = await fetch(`${API_BASE}/api/messages/count`)
+    if (res.ok) {
+      const data = await res.json()
+      totalCount.value = data.count
+    }
+  } catch (err) {
+    // non-critical — ignore
+  }
+}
+
+onMounted(fetchTotalCount)
 
 function clearMessages() {
   messages.value = []
@@ -152,6 +172,7 @@ async function sendOne() {
   nextTick(() => {
     if (listEl.value) listEl.value.scrollTop = 0
   })
+  fetchTotalCount()
 }
 
 async function send() {
@@ -207,6 +228,23 @@ function cancel() {
 .panel__header {
   padding: 24px 24px 16px;
   border-bottom: 1px solid var(--cds-border-subtle);
+}
+.panel__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.count-badge {
+  font-family: var(--cds-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.32px;
+  color: var(--cds-text-secondary);
+  background: var(--cds-layer-01);
+  padding: 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
 }
 .panel__title {
   font-family: var(--cds-font-family);

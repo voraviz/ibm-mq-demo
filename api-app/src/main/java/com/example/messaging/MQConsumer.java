@@ -14,6 +14,8 @@ import jakarta.jms.Session;
 import jakarta.jms.TextMessage;
 import org.jboss.logging.Logger;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 @ApplicationScoped
 public class MQConsumer {
 
@@ -34,6 +36,8 @@ public class MQConsumer {
     private volatile MessageConsumer jmsConsumer;
     private volatile Thread          listenerThread;
     private volatile boolean         closing = false;
+
+    private final AtomicLong receiveCounter = new AtomicLong(0);
 
     public synchronized void start() {
         if (jmsConnection != null) {
@@ -61,6 +65,10 @@ public class MQConsumer {
         return jmsConnection != null;
     }
 
+    public long getCount() {
+        return receiveCounter.get();
+    }
+
     @PreDestroy
     public synchronized void onDestroy() {
         if (jmsConnection != null) {
@@ -82,6 +90,7 @@ public class MQConsumer {
                     String text = textMsg.getText();
                     LOG.infof("GET message: %s", text);
                     webSocket.broadcast(text);
+                    receiveCounter.incrementAndGet();
                 }
             } catch (JMSException e) {
                 if (closing) {

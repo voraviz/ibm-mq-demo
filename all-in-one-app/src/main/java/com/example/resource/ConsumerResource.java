@@ -36,5 +36,13 @@ public class ConsumerResource {
         return Response.ok(new StatusResponse(consumer.isRunning() ? "running" : "stopped")).build();
     }
 
+    @GET
+    @Path("/count")
+    public Response count() {
+        return Response.ok(new CountResponse(consumer.getCount())).build();
+    }
+
     public record StatusResponse(String status) {}
+
+    public record CountResponse(long count) {}
 }

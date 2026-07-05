@@ -6,6 +6,7 @@ import io.smallrye.reactive.messaging.annotations.Emitter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -44,7 +45,15 @@ public class MessageResource {
         return Response.accepted(new StatusResponse("sent", body)).build();
     }
 
+    @GET
+    @Path("/count")
+    public Response getCount() {
+        return Response.ok(new CountResponse(counter.get())).build();
+    }
+
     public record MessageRequest(String text) {}
 
     public record StatusResponse(String status, String message) {}
+
+    public record CountResponse(long count) {}
 }
