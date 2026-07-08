@@ -15,7 +15,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.36.1</quarkus.platform.version>
+    <quarkus.platform.version>3.37.1</quarkus.platform.version>
     <ibm.mq.version>9.4.3.0</ibm.mq.version>
     <dependency-check.version>12.1.1</dependency-check.version>
   </properties>
