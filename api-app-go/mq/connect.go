@@ -12,7 +12,14 @@ import (
 // The caller is responsible for calling qmgr.Disc() when done.
 func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
 	cno := ibmmq.NewMQCNO()
-	cno.Options = ibmmq.MQCNO_CLIENT_BINDING
+	cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
+		// Reconnect to the same queue manager after a transient failure or
+		// native HA failover — the client library follows the new active node
+		// automatically without application-level retry.
+		ibmmq.MQCNO_RECONNECT |
+		// Also search all addresses in ConnectionName (IBM_MQ_CONNECTION_LIST)
+		// when reconnecting, so failover works across all HA nodes in the list.
+		ibmmq.MQCNO_RECONNECT_Q_MGR
 
 	cd := ibmmq.NewMQCD()
 	cd.ChannelName = cfg.Channel
