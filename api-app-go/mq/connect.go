@@ -13,12 +13,11 @@ import (
 func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
 	cno := ibmmq.NewMQCNO()
 	cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
-		// Reconnect to the same queue manager after a transient failure or
-		// native HA failover — the client library follows the new active node
-		// automatically without application-level retry.
-		ibmmq.MQCNO_RECONNECT |
-		// Also search all addresses in ConnectionName (IBM_MQ_CONNECTION_LIST)
-		// when reconnecting, so failover works across all HA nodes in the list.
+		// MQCNO_RECONNECT_Q_MGR: on disconnect, the client library automatically
+		// retries every address in ConnectionName (IBM_MQ_CONNECTION_LIST) to
+		// find the active native HA node — Get/Put calls block transparently
+		// during failover and resume without application-level retry.
+		// Use this (not MQCNO_RECONNECT) when ConnectionName is a multi-host list.
 		ibmmq.MQCNO_RECONNECT_Q_MGR
 
 	cd := ibmmq.NewMQCD()
