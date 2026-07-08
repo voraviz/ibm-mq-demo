@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # obs-app/api — Quarkus Micrometer metrics
+  - job_name: 'ibm-mq-obs-api'
+    static_configs:
+      - targets: ['host.containers.internal:8080']
+    metrics_path: /q/metrics
+
+  # IBM MQ built-in Prometheus exporter - mq-node-1
+  - job_name: 'ibm-mq'
+    static_configs:
+      - targets: ['host.containers.internal:9157']
+    metrics_path: /metrics
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+
+  # IBM MQ built-in Prometheus exporter - mq-node-2
+  - job_name: 'ibm-mq'
+    static_configs:
+      - targets: ['host.containers.internal:9158']
+    metrics_path: /metrics
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+
+  # IBM MQ built-in Prometheus exporter - mq-node-3
+  - job_name: 'ibm-mq'
+    static_configs:
+      - targets: ['host.containers.internal:9159']
+    metrics_path: /metrics
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
