@@ -10,7 +10,7 @@ import (
 
 // connect opens a client connection to IBM MQ using MQCNO + MQCD + MQCSP.
 // The caller is responsible for calling qmgr.Disc() when done.
-func connect(cfg *config.Config) (ibmmq.MQQueueManager, error) {
+func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
 	cno := ibmmq.NewMQCNO()
 	cno.Options = ibmmq.MQCNO_CLIENT_BINDING
 
@@ -31,5 +31,6 @@ func connect(cfg *config.Config) (ibmmq.MQQueueManager, error) {
 	csp.Password = cfg.Password
 	cno.SecurityParms = csp
 
-	return ibmmq.Connx(cfg.QueueManager, cno)
+	qmgr, err := ibmmq.Connx(cfg.QueueManager, cno)
+	return qmgr, cd.ConnectionName, err
 }

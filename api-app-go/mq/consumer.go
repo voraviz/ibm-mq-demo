@@ -85,7 +85,7 @@ func (c *Consumer) GetCount() int64 {
 // openResources creates the MQ connection, session and consumer handle.
 // Must be called with c.mu held.
 func (c *Consumer) openResources() error {
-	qmgr, err := connect(c.cfg)
+	qmgr, _, err := connect(c.cfg)
 	if err != nil {
 		return err
 	}

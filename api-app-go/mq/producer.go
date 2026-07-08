@@ -29,7 +29,7 @@ func (p *Producer) Put(text string) (string, error) {
 	n := p.counter.Add(1)
 	body := fmt.Sprintf("[#%d] %s", n, text)
 
-	qmgr, err := connect(p.cfg)
+	qmgr, _, err := connect(p.cfg)
 	if err != nil {
 		p.counter.Add(-1) // roll back on connection failure
 		return "", fmt.Errorf("MQ connect: %w", err)
