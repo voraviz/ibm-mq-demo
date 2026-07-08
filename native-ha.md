@@ -4,18 +4,22 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
 
 ## Table of Contents
 
-- [Architecture](#architecture)
-- [MQ Configuration](#mq-configuration)
-  - [Prerequisites](#prerequisites)
-  - [Create Network and Volumes](#create-network-and-volumes)
-  - [Create Secrets](#create-secrets)
-  - [Native HA Node Configuration](#native-ha-node-configuration)
-  - [Start Containers](#start-containers)
-  - [Verify the Cluster](#verify-the-cluster)
-- [Test Applications](#test-applications)
-  - [All-in-one Java Application](#all-in-one-java-application)
-  - [Golang REST API](#golang-rest-api)
-- [Failover Test](#failover-test)
+- [IBM MQ Native HA](#ibm-mq-native-ha)
+  - [Table of Contents](#table-of-contents)
+  - [Architecture](#architecture)
+  - [MQ Configuration](#mq-configuration)
+    - [Prerequisites](#prerequisites)
+    - [Create Network and Volumes](#create-network-and-volumes)
+    - [Create Secrets](#create-secrets)
+    - [Native HA Node Configuration](#native-ha-node-configuration)
+    - [Start Containers](#start-containers)
+    - [Verify the Cluster](#verify-the-cluster)
+  - [Test Applications](#test-applications)
+    - [All-in-one Java Application](#all-in-one-java-application)
+    - [Golang REST API](#golang-rest-api)
+    - [Golang JMS REST API](#golang-jms-rest-api)
+  - [WIP](#wip)
+  - [Failover Test](#failover-test)
 
 ---
 
@@ -431,6 +435,8 @@ Open [http://localhost:8080](http://localhost:8080) in a browser.
 > npm run dev
 > ```
 
+### Golang JMS REST API
+WIP
 ---
 
 ## Failover Test
