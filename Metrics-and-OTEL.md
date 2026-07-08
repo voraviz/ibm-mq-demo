@@ -1,5 +1,6 @@
 # Grafana and Jaeger
-- Enable metrics and OTEL in ui-app and api-app
+WIP
+<!-- - Enable metrics and OTEL in ui-app and api-app
 - Keep original ui-app and api-app. Do not modify both apps
 - Use ui-app and api-app as reference
 - api-app already has quarkus-micrometer-registry-prometheus
@@ -17,5 +18,5 @@ podman run --secret mqAdminPassword --secret mqAppPassword \
   icr.io/ibm-messaging/mq
 ```
 - Script to start jaeger and otel collector containers is [etc/start-jaeger-otel.sh](etc/start-jaeger-otel.sh)
-- Example of Quarkus Grafana dashboard [etc/14370_rev6.json](etc/14370_rev6.json)
+- Example of Quarkus Grafana dashboard [etc/14370_rev6.json](etc/14370_rev6.json) -->
 

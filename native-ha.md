@@ -1,101 +1,129 @@
 # IBM MQ Native HA
-- [IBM MQ Native HA](#ibm-mq-native-ha)
-  - [MQ Configuration](#mq-configuration)
+
+IBM MQ Native HA provides automatic failover across a three-node group using the Raft consensus protocol. One node is elected **Active** and serves all client connections; the other two are **Replicas** that receive continuous log replication. When the active node fails, one replica is promoted to active within seconds and clients reconnect automatically through the connection name list.
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [MQ Configuration](#mq-configuration)
+  - [Prerequisites](#prerequisites)
+  - [Create Network and Volumes](#create-network-and-volumes)
+  - [Create Secrets](#create-secrets)
+  - [Native HA Node Configuration](#native-ha-node-configuration)
+  - [Start Containers](#start-containers)
+  - [Verify the Cluster](#verify-the-cluster)
+- [Test Applications](#test-applications)
   - [All-in-one Java Application](#all-in-one-java-application)
-  - [Test Native HA Cluster](#test-native-ha-cluster)
+  - [Golang REST API](#golang-rest-api)
+- [Failover Test](#failover-test)
 
-## MQ Configuration 
-Create MQ Native HA with 3 containers by podman ( or docker)
+---
 
-```bash
+## Architecture
 
-               +----------------------------------------+
-               |           Client Applications          |
-               |    onnects via Connection Name List    |     
-               |                                        |
-               +----------------------------------------+
-                                   │
-       ┌───────────────────────────┼───────────────────────────┐
-       │ (Active Traffic)          │                           │ 
-       ▼                           ▼                           ▼
+```
+                    +------------------------------------------+
+                    |          Client Applications             |
+                    |   Connects via Connection Name List      |
+                    |  localhost(1414),localhost(1415),(1416)  |
+                    +------------------------------------------+
+                                        │
+            ┌───────────────────────────┼───────────────────────────┐
+            │ (Active Traffic)          │                           │
+            ▼                           ▼                           ▼
 +────────────────────────+  +────────────────────────+  +────────────────────────+
 │ Container: mq-node-1   │  │ Container: mq-node-2   │  │ Container: mq-node-3   │
-│ Port:      1414        │  │ Port:      1415        │  │ Port:      1416        │
+│ MQ port:   1414        │  │ MQ port:   1415        │  │ MQ port:   1416        │
+│ Web:       9443        │  │ Web:       9444        │  │ Web:       9445        │
 │                        │  │                        │  │                        │
 │  ┌──────────────────┐  │  │  ┌──────────────────┐  │  │  ┌──────────────────┐  │
-│  │   Queue Manager  │  │  │  │   Queue Manager  │  │  │  │   Queue Manager  │  │
-│  │     (ACTIVE)     │  │  │  │    (REPLICA)     │  │  │  │    (REPLICA)     │  │
+│  │  Queue Manager   │  │  │  │  Queue Manager   │  │  │  │  Queue Manager   │  │
+│  │    (ACTIVE)      │  │  │  │   (REPLICA)      │  │  │  │   (REPLICA)      │  │
 │  └─────────┬────────┘  │  │  └─────────┬────────┘  │  │  └─────────┬────────┘  │
 +────────────┼───────────+  +────────────┼───────────+  +────────────┼───────────+
              │                           ▲                           ▲
              │      Log Replication      │                           │
              └───────────────────────────┴───────────────────────────┘
-                           (Raft Consensus Protocol)                
-```                                                             
-  
+                           (Raft Consensus Protocol, port 4444)
+```
 
-- Create podman network, Dedicated network so containers resolve each other by name
+---
+
+## MQ Configuration
+
+### Prerequisites
+
+- [Podman](https://podman.io/) (or Docker) installed.
+- On Apple Silicon (M-series), all `podman run` commands include `--platform linux/amd64` because IBM does not publish an arm64 MQ server container image — it is available only for `linux/amd64`, `linux/s390x`, and `linux/ppc64le`.
+
+### Create Network and Volumes
+
+Create a dedicated container network so nodes can resolve each other by hostname:
+
 ```bash
 podman network create mq-ha-net
 ```
 
-- Create podman volume. Alternatively for docker, you can mapped local file system to /var/mqm
+Create one persistent volume per node. The script removes existing volumes before re-creating them so you can re-run it on a clean slate:
+
 ```bash
-# Persistent volumes — one per node
-for i in mq-node1-data mq-node2-data mq-node3-data
-do
- podman volume exists $i
- if [ $? -eq 0 ];
- then
-  podman volume rm $i
- fi
- podman volume create $i 
+for i in mq-node1-data mq-node2-data mq-node3-data; do
+  podman volume exists $i && podman volume rm $i
+  podman volume create $i
 done
 ```
-- Create secret for store admin and app password
-- MQ Configuration
-  
-  | Component        | Configuration file                                                 |
-  |------------------|--------------------------------------------------------------------|
-  | MQSC             | [/etc/mqm/config.mqsc](mq-native-ha/config/config.auth.mqsc)       |
-  | Native HA Node 1 | [/etc/mqm/native-ha.ini](mq-native-ha/config/qm-node1.ini) |
-  | Native HA Node 2 | [/etc/mqm/native-ha.ini](mq-native-ha/config/qm-node2.ini) |
-  | Native HA Node 3 | [/etc/mqm/native-ha.ini](mq-native-ha/config/qm-node3.ini) |
 
-  Native HA configuration for node1
+### Create Secrets
 
-  ```ini
-  NativeHALocalInstance:
-  Name=node-1
-  GroupName=HA-GROUP-1
-
-  NativeHAInstance:
-    Name=node-1
-    ReplicationAddress=mq-node-1(4444)
-
-  NativeHAInstance:
-    Name=node-2
-    ReplicationAddress=mq-node-2(4444)
-
-  NativeHAInstance:
-    Name=node-3
-    ReplicationAddress=mq-node-3(4444)
-  ```
-
-- Create secret for  administrator and application user
+Store the admin and application passwords as Podman secrets so they are never passed as plain-text environment variables:
 
 ```bash
 printf "passw0rd" | podman secret create mqAdminPassword -
 printf "passw0rd" | podman secret create mqAppPassword -
 ```
 
-- Create MQ containers
+### Native HA Node Configuration
+
+Each node requires an `native-ha.ini` file that declares the local instance and the full membership list. All three files share the same `NativeHAInstance` list — only `NativeHALocalInstance.Name` differs.
+
+**Node 1** — [`mq-native-ha/config/qm-node1.ini`](mq-native-ha/config/qm-node1.ini)
+
+```ini
+NativeHALocalInstance:
+  Name=node-1
+  GroupName=HA-GROUP-1
+
+NativeHAInstance:
+  Name=node-1
+  ReplicationAddress=mq-node-1(4444)
+
+NativeHAInstance:
+  Name=node-2
+  ReplicationAddress=mq-node-2(4444)
+
+NativeHAInstance:
+  Name=node-3
+  ReplicationAddress=mq-node-3(4444)
+```
+
+The MQSC configuration ([`mq-native-ha/config/config.auth.mqsc`](mq-native-ha/config/config.auth.mqsc)) defines the channel, queues, channel authentication rules, and object authority records used by the demo applications.
+
+| Component        | File                                                                           |
+|------------------|--------------------------------------------------------------------------------|
+| MQSC             | [`mq-native-ha/config/config.auth.mqsc`](mq-native-ha/config/config.auth.mqsc)|
+| Native HA Node 1 | [`mq-native-ha/config/qm-node1.ini`](mq-native-ha/config/qm-node1.ini)        |
+| Native HA Node 2 | [`mq-native-ha/config/qm-node2.ini`](mq-native-ha/config/qm-node2.ini)        |
+| Native HA Node 3 | [`mq-native-ha/config/qm-node3.ini`](mq-native-ha/config/qm-node3.ini)        |
+
+### Start Containers
+
 ```bash
-# On Apple Silicon need explicitly specified amd64 platform: --platform linux/amd64
-# NODE 1
-TAG=10.0.0.0-r1-amd64 
+TAG=10.0.0.0-r1-amd64
 CONFIG=config.auth.mqsc
-podman run -d --secret mqAdminPassword --secret mqAppPassword \
+
+# ── Node 1 ──────────────────────────────────────────────────────────────────
+podman run -d \
+  --secret mqAdminPassword --secret mqAppPassword \
   --name mq-node-1 \
   --platform linux/amd64 \
   --network mq-ha-net \
@@ -113,8 +141,9 @@ podman run -d --secret mqAdminPassword --secret mqAppPassword \
   -e MQ_ENABLE_METRICS=true \
   icr.io/ibm-messaging/mq:$TAG
 
-# NODE 2
-podman run -d --secret mqAdminPassword --secret mqAppPassword  \
+# ── Node 2 ──────────────────────────────────────────────────────────────────
+podman run -d \
+  --secret mqAdminPassword --secret mqAppPassword \
   --name mq-node-2 \
   --platform linux/amd64 \
   --network mq-ha-net \
@@ -132,8 +161,9 @@ podman run -d --secret mqAdminPassword --secret mqAppPassword  \
   -e MQ_ENABLE_METRICS=true \
   icr.io/ibm-messaging/mq:$TAG
 
-# NODE 3
-podman run -d --secret mqAdminPassword --secret mqAppPassword \
+# ── Node 3 ──────────────────────────────────────────────────────────────────
+podman run -d \
+  --secret mqAdminPassword --secret mqAppPassword \
   --name mq-node-3 \
   --platform linux/amd64 \
   --network mq-ha-net \
@@ -149,62 +179,114 @@ podman run -d --secret mqAdminPassword --secret mqAppPassword \
   -e MQ_NATIVE_HA=true \
   -e MQ_ENABLE_EMBEDDED_WEB_SERVER=true \
   -e MQ_ENABLE_METRICS=true \
-  icr.io/ibm-messaging/mq:$TAG 
-  ```
+  icr.io/ibm-messaging/mq:$TAG
+```
 
-- verify containers
+### Verify the Cluster
+
+**Check all containers are running:**
 
 ```bash
 podman ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
 ```
 
-Expected Output
+Expected output:
 
-```bash
-NAMES       PORTS                                                                             STATUS
+```
+NAMES       PORTS                                                                               STATUS
 mq-node-1   0.0.0.0:1414->1414/tcp, 0.0.0.0:9157->9157/tcp, 0.0.0.0:9443->9443/tcp, 9415/tcp  Up 14 seconds
 mq-node-2   0.0.0.0:1415->1414/tcp, 0.0.0.0:9158->9157/tcp, 0.0.0.0:9444->9443/tcp, 9415/tcp  Up 12 seconds
 mq-node-3   0.0.0.0:1416->1414/tcp, 0.0.0.0:9159->9157/tcp, 0.0.0.0:9445->9443/tcp, 9415/tcp  Up 10 seconds
 ```
 
-- verify HA status. Wait ~30 seconds for election to complete
-  Reference: [IBM MQ 9.4.x dspmq](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-dspmq-display-queue-managers)
+**Check Native HA status** — wait ~30 seconds for the initial leader election to complete:
 
 ```bash
 podman exec mq-node-1 dspmq -o nativeha -x
 ```
-Output Example. node-2 is Active node
 
-```bash
+Expected output (active node may vary):
+
+```
 QMNAME(QM1)       ROLE(Replica) INSTANCE(node-1) INSYNC(yes) QUORUM(3/3) GRPLSN(<0:0:36:38367>) GRPNAME(HA-GROUP-1) GRPROLE(Live)
  INSTANCE(node-1) ROLE(Replica) REPLADDR(mq-node-1) CONNACTV(yes) INSYNC(yes) BACKLOG(0) CONNINST(yes) ACKLSN(<0:0:36:38367>) HASTATUS(Normal) SYNCTIME(2026-07-07T10:37:36.077777Z) ALTDATE(2026-07-07) ALTTIME(10.37.37)
- INSTANCE(node-2) ROLE(Active) REPLADDR(mq-node-2) CONNACTV(yes) INSYNC(yes) BACKLOG(0) CONNINST(yes) ACKLSN(<0:0:36:38367>) HASTATUS(Normal) SYNCTIME(2026-07-07T10:37:37.430102Z) ALTDATE(2026-07-07) ALTTIME(10.37.37)
+ INSTANCE(node-2) ROLE(Active)  REPLADDR(mq-node-2) CONNACTV(yes) INSYNC(yes) BACKLOG(0) CONNINST(yes) ACKLSN(<0:0:36:38367>) HASTATUS(Normal) SYNCTIME(2026-07-07T10:37:37.430102Z) ALTDATE(2026-07-07) ALTTIME(10.37.37)
  INSTANCE(node-3) ROLE(Replica) REPLADDR(mq-node-3) CONNACTV(yes) INSYNC(yes) BACKLOG(0) CONNINST(yes) ACKLSN(<0:0:36:38367>) HASTATUS(Normal) SYNCTIME(2026-07-07T10:37:36.077777Z) ALTDATE(2026-07-07) ALTTIME(10.37.37)
 ```
 
-- MQ ports of all nodes are up
-    
+> **Notes:**
+> - `QUORUM(3/3)` — all three nodes are participating.
+> - `node-2` is active in this example; `node-1` and `node-3` are replicas.
+> - Reference: [dspmq command — IBM Docs](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-dspmq-display-queue-managers)
+
+**Confirm all MQ listener ports are reachable:**
+
 ```bash
-nc -vz 127.0.0.1 1414;nc -vz 127.0.0.1 1415;nc -vz 127.0.0.1 1416
-```
-    
-Output
-    
-```bash
-Connection to 127.0.0.1 port 1414 [tcp/ibm-mqseries] succeeded!
-Connection to 127.0.0.1 port 1415 [tcp/dbstar] succeeded!
-Connection to 127.0.0.1 port 1416 [tcp/novell-lu6.2] succeeded!
+nc -vz 127.0.0.1 1414
+nc -vz 127.0.0.1 1415
+nc -vz 127.0.0.1 1416
 ```
 
-## All-in-one Java Application
+**Probe which node is active via the REST API** (useful when scripting a Layer 4 load-balancer health check):
 
-Java application as backend to connect to MQ wih bundled Vue.js application as frontend UI
-- App configuration with 3 nodes
+```bash
+ADMIN_USER=admin
+ADMIN_PASS=passw0rd
+QM_NAME=QM1
+
+for PORT in 9443 9444 9445; do
+  echo "=== port $PORT ==="
+  curl -sk -u ${ADMIN_USER}:${ADMIN_PASS} \
+    https://localhost:$PORT/ibmmq/rest/v1/admin/qmgr/$QM_NAME \
+    | python3 -m json.tool 2>/dev/null || echo "(no response)"
+done
+```
+
+Response from the **active** node:
+
+```json
+{
+  "qmgr": [
+    {
+      "name": "QM1",
+      "state": "running"
+    }
+  ]
+}
+```
+
+Response from a **replica** node:
+
+```json
+{
+  "error": [{
+    "msgId": "MQWB0004E",
+    "completionCode": 2,
+    "reasonCode": 2543,
+    "type": "pcf",
+    "message": "MQWB0004E: An internal error occurred while communicating with the queue manager. The root MQ reason code was 2543 : MQRC_STANDBY_Q_MGR."
+  }]
+}
+```
+
+---
+
+## Test Applications
+
+Both applications connect via a **connection name list** covering all three nodes and enable automatic client reconnect so that a failover is transparent to the application layer.
+
+### All-in-one Java Application
+
+[`all-in-one-app`](all-in-one-app) is a Quarkus/JMS backend with a bundled Vue.js frontend.
+
+**Connection name list** — [`application.properties`](all-in-one-app/src/main/resources/application.properties):
+
 ```properties
-# ── IBM MQ connection parameters ────────────────────────────────────────────
 ibm.mq.connection-list=localhost(1414),localhost(1415),localhost(1416)
 ```
-- Enable automatic reconnect and config reconnect timeout
+
+**Automatic reconnect** — [`MQConnectionFactoryProducer.java`](all-in-one-app/src/main/java/com/example/config/MQConnectionFactoryProducer.java):
+
 ```java
 @ApplicationScoped
 public class MQConnectionFactoryProducer {
@@ -222,84 +304,167 @@ public class MQConnectionFactoryProducer {
         factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
-        // Automatically reconnect to the queue manager when it becomes available again.
-        // WMQ_CLIENT_RECONNECT retries indefinitely until the QM is reachable.
-        // WMQ_CLIENT_RECONNECT_TIMEOUT (seconds) caps how long a single reconnect
-        // attempt waits before the client gives up and throws to the application.
+        // WMQ_CLIENT_RECONNECT retries indefinitely across all hosts in the
+        // connection name list until the active node is found.
+        // WMQ_CLIENT_RECONNECT_TIMEOUT caps each individual reconnect attempt.
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
-        factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, 30); // 30 sec
+        factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, 30);
         return factory;
     }
 }
 ```
-- Build Java application with maven
+
+**Build and run:**
 
 ```bash
+# Build
 mvn clean package
-```
 
-- Run application
-
-```bash
+# Run from JAR
 java -jar target/quarkus-app/quarkus-run.jar
-```
 
-- You can also run all-in-one-app from container
-```bash
+# Or run from container (host.containers.internal resolves to the host machine)
 podman run -p 8080:8080 \
--e IBM.MQ.CONNECTION-LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
-quay.io/voravitl/simple-mq-app:latest
-```
-Output
-
-```log
- --/ __ \/ / / / _ | / _ \/ //_/ / / / __/
- -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \
---\___\_\____/_/ |_/_/|_/_/|_|\____/___/
-2026-07-07 18:10:17,975 WARN  [io.smallrye.reactive.messaging.jms] (main) Please add one of the additional mapping modules (-jsonb or -jackson) to be able to (de)serialize JSON messages.
-2026-07-07 18:10:18,515 INFO  [io.quarkus] (main) ibm-mq-demo 1.0.0-SNAPSHOT on JVM (powered by Quarkus 3.36.1) started in 0.939s. Listening on: http://0.0.0.0:8080
-2026-07-07 18:10:18,516 INFO  [io.quarkus] (main) Profile prod activated.
-2026-07-07 18:10:18,516 INFO  [io.quarkus] (main) Installed features: [cdi, messaging, micrometer, rest, rest-jackson, smallrye-context-propagation, vertx, websockets-next]
+  -e IBM.MQ.CONNECTION-LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
+  quay.io/voravitl/simple-mq-app:latest
 ```
 
-- Use web browser open to http://localhost:8080
-  Remark: Top menu bar show that application connect to mq-node-2 that run on port 1415
+Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
 
-![](images/mq-app.png)
+![Application connected to mq-node-2](images/mq-app.png)
 
-## Test Native HA Cluster
-- Find what node is active with *dspmq* command
-    
+### Golang REST API
+
+[`api-app-go`](api-app-go) is a standalone Go REST API backend. Pair it with the [`ui-app`](ui-app) Vue.js frontend.
+
+**Connection name list** — [`api-app-go/config/config.go`](api-app-go/config/config.go):
+
+```go
+func Load() *Config {
+    return &Config{
+        ConnectionList:   getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
+        Channel:          getenv("IBM_MQ_CHANNEL", "DEV.APP.SVRCONN"),
+        QueueManager:     getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
+        Username:         getenv("IBM_MQ_USERNAME", "app"),
+        Password:         getenv("IBM_MQ_PASSWORD", "passw0rd"),
+        Queue:            getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
+        ReconnectTimeout: getenvInt("IBM_MQ_RECONNECT_TIMEOUT", 30),
+        ServerPort:       getenv("SERVER_PORT", "8081"),
+    }
+}
+```
+
+**Automatic reconnect** — [`api-app-go/mq/connect.go`](api-app-go/mq/connect.go):
+
+```go
+cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
+    // MQCNO_RECONNECT_Q_MGR: retries every address in ConnectionName to
+    // find the active native HA node. Get/Put calls block transparently
+    // during failover without application-level retry logic.
+    // Use MQCNO_RECONNECT_Q_MGR (not MQCNO_RECONNECT) with a multi-host list.
+    ibmmq.MQCNO_RECONNECT_Q_MGR
+```
+
+`cd.HeartbeatInterval` is set to `ReconnectTimeout` (default 30 s), matching the Java `WMQ_CLIENT_RECONNECT_TIMEOUT` behaviour — a stalled reconnect attempt is abandoned after this period.
+
+**Prerequisites — IBM MQ C client libraries**
+
+The `mq-golang` library uses CGO and requires the IBM MQ C client headers and shared libraries at build time.
+
+- **macOS:**
+
+  ```bash
+  brew tap ibm-messaging/ibmmq
+  brew install ibm-messaging/ibmmq/mqdevtoolkit
+  # Installs to /opt/mqm — the default CGO search path for mq-golang
+  ```
+
+- **Linux:**
+
+  ```bash
+  MQ_URL=https://public.dhe.ibm.com/ibmdl/export/pub/software/websphere/messaging/mqdev/redist/9.4.5.1-IBM-MQC-Redist-LinuxX64.tar.gz
+  mkdir -p /opt/mqm && curl -fsSL "$MQ_URL" | tar -xz -C /opt/mqm
+  ```
+
+  If installed to a non-default path, set the CGO flags before building:
+
+  ```bash
+  export CGO_CFLAGS="-I/your/path/inc -D_REENTRANT"
+  export CGO_LDFLAGS="-L/your/path/lib64 -lmqm_r -Wl,-rpath,/your/path/lib64"
+  ```
+
+**Build and run the API:**
+
+```bash
+cd api-app-go
+go build -o api-app-go .
+./api-app-go
+```
+
+The API listens on **http://localhost:8081** by default. Override any setting via environment variable before running:
+
+```bash
+IBM_MQ_CONNECTION_LIST="localhost(1414),localhost(1415),localhost(1416)" \
+IBM_MQ_USERNAME="app" \
+IBM_MQ_PASSWORD="passw0rd" \
+IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
+./api-app-go
+```
+
+**Run the UI (`ui-app`):**
+
+The Vue.js frontend is a separate Vite app. It proxies `/api` and `/ws` to `http://localhost:8081` automatically in dev mode, so no extra configuration is needed.
+
+```bash
+cd ui-app
+npm install        # first time only
+npm run dev
+```
+
+Open [http://localhost:8080](http://localhost:8080) in a browser.
+
+> To point the UI at a non-default API host, copy [`.env.example`](ui-app/.env.example) and set `VITE_API_BASE_URL`:
+>
+> ```bash
+> cp ui-app/.env.example ui-app/.env
+> # edit .env and set VITE_API_BASE_URL=http://<api-host>:8081
+> npm run dev
+> ```
+
+---
+
+## Failover Test
+
+This walkthrough demonstrates zero-message-loss failover.
+
+**1. Identify the active node:**
+
 ```bash
 podman exec mq-node-1 dspmq -o nativeha -x
 ```
 
-- Put 500 messages and start Consumer
-  
-![](images/mq-app-put-500.png)
+**2. Put 500 messages and start the consumer:**
 
-- Stop active node
-  e.g. MQ is active on mq-node-2
+![Put 500 messages](images/mq-app-put-500.png)
+
+**3. Stop the active node** (replace `mq-node-2` with whichever node is active):
 
 ```bash
 podman stop mq-node-2
 ```
 
-- Application will automatically connect to new active node
+**4. Observe automatic reconnection** — the application reconnects to the new active node within seconds:
 
-![](images/mq-app-automatic-connect-new-active.png)
+![Application reconnected to new active node](images/mq-app-automatic-connect-new-active.png)
 
-- Verify that there is no messages lost
-  
-![](images/mq-app-message-not-lost.png)
+**5. Verify zero message loss:**
 
-- Bring back the node that you previously stop i.e. mq-node-2
+![No messages lost after failover](images/mq-app-message-not-lost.png)
+
+**6. Bring the stopped node back online:**
 
 ```bash
 podman start mq-node-2
 ```
 
- 
-
-
-
+The recovered node rejoins the group as a replica and begins catching up via log replication.
