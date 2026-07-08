@@ -10,6 +10,7 @@ import (
 	"github.com/ibm-messaging/ibm_mq/api-app-go/mq"
 	"github.com/ibm-messaging/ibm_mq/api-app-go/ws"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -29,8 +30,8 @@ func main() {
 	// ── Prometheus registry ────────────────────────────────────────────────
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
-		prometheus.NewGoCollector(),
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 
 	// ── HTTP handlers ──────────────────────────────────────────────────────
