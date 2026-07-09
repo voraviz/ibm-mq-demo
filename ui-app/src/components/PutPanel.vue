@@ -127,6 +127,9 @@ const totalCount   = ref(0)
 
 const sessionCount = computed(() => messages.value.length)
 
+// How long to wait before retrying a failed send during MQ failover (ms).
+const RETRY_DELAY_MS = 2000
+
 let notifTimer   = null
 let cancelSignal = false
 
@@ -183,6 +186,29 @@ async function sendOne() {
   fetchTotalCount()
 }
 
+// sendOneWithRetry attempts sendOne() and, on any network / server error,
+// waits RETRY_DELAY_MS and retries indefinitely until it succeeds or the
+// user cancels. This ensures the bulk-send loop survives an MQ node failover
+// without aborting the remaining messages.
+async function sendOneWithRetry() {
+  while (true) {
+    if (cancelSignal) return false  // user cancelled — stop retrying
+    try {
+      await sendOne()
+      return true  // success
+    } catch (err) {
+      // Show a transient reconnecting notice so the user knows what's happening.
+      notification.value = {
+        type: 'warning',
+        message: `Send failed (${err.message}) — retrying in ${RETRY_DELAY_MS / 1000}s…`,
+      }
+      // Wait, then re-check cancel before the next attempt.
+      await sleep(RETRY_DELAY_MS)
+      notification.value = null
+    }
+  }
+}
+
 async function send() {
   if (!text.value.trim()) return
 
@@ -191,33 +217,42 @@ async function send() {
   cancelSignal       = false
   notification.value = null
 
+  // Sync the starting total from the server so the "Total" badge reflects the
+  // true server-side counter even if previous batches were partially delivered
+  // during a failover.
+  await fetchTotalCount()
+
   const total = Math.max(1, Math.floor(count.value))
 
-  try {
-    for (let i = 0; i < total; i++) {
-      if (cancelSignal) {
-        showNotification('warning', `Cancelled after ${sentCount.value} of ${total} messages.`)
-        return
-      }
-
-      await sendOne()
-      sentCount.value = i + 1
-
-      if (i < total - 1 && delayMs.value > 0) {
-        await sleep(delayMs.value)
-      }
+  for (let i = 0; i < total; i++) {
+    if (cancelSignal) {
+      showNotification('warning', `Cancelled after ${sentCount.value} of ${total} messages.`)
+      sending.value = false
+      return
     }
 
-    if (total === 1) {
-      showNotification('success', 'Message sent successfully.')
-    } else {
-      showNotification('success', `${total} messages sent successfully.`)
+    // Fix 1: retry on error rather than aborting the entire batch.
+    const ok = await sendOneWithRetry()
+    if (!ok) {
+      // sendOneWithRetry returns false only when cancel was signalled mid-retry.
+      showNotification('warning', `Cancelled after ${sentCount.value} of ${total} messages.`)
+      sending.value = false
+      return
     }
-  } catch (err) {
-    showNotification('error', err.message || 'Network error — could not reach the server.')
-  } finally {
-    sending.value = false
+
+    sentCount.value = i + 1
+
+    if (i < total - 1 && delayMs.value > 0) {
+      await sleep(delayMs.value)
+    }
   }
+
+  if (total === 1) {
+    showNotification('success', 'Message sent successfully.')
+  } else {
+    showNotification('success', `${total} messages sent successfully.`)
+  }
+  sending.value = false
 }
 
 function cancel() {
