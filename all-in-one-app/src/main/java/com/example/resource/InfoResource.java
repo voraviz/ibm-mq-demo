@@ -26,8 +26,8 @@ public class InfoResource {
     public Response info() {
         boolean connected = false;
         String queueManager = mqConfig.queueManager();
-        String host = mqConfig.host();
-        int port = mqConfig.port();
+        String host = "";
+        int port = 0;
 
         try (Connection connection = connectionFactory.createConnection()) {
             connected = true;

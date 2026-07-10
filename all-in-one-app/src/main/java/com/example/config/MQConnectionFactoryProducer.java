@@ -22,8 +22,10 @@ public class MQConnectionFactoryProducer {
         factory.setChannel(config.channel());
         factory.setQueueManager(config.queueManager());
         factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
+        //factory.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
+        factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
         // Automatically reconnect to the queue manager when it becomes available again.
         // WMQ_CLIENT_RECONNECT retries indefinitely until the QM is reachable.
         // WMQ_CLIENT_RECONNECT_TIMEOUT (seconds) caps how long a single reconnect

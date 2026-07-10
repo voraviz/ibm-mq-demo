@@ -8,11 +8,9 @@ public interface MQConfig {
 
     String connectionList();
 
-    String host();
-
-    int port();
-
     String channel();
+
+    String applicationName();
 
     @WithName("queue-manager")
     String queueManager();
