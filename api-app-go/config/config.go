@@ -12,6 +12,7 @@ type Config struct {
 	ConnectionList   string // IBM_MQ_CONNECTION_LIST
 	Host             string // IBM_MQ_HOST
 	Port             int    // IBM_MQ_PORT
+	AppName          string // MQAPPLNAME
 	Channel          string // IBM_MQ_CHANNEL
 	QueueManager     string // IBM_MQ_QUEUE_MANAGER
 	Username         string // IBM_MQ_USERNAME
@@ -45,6 +46,7 @@ func Load() *Config {
 		ConnectionList:   getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
 		Host:             getenv("IBM_MQ_HOST", "localhost"),
 		Port:             getenvInt("IBM_MQ_PORT", 1414),
+		AppName:          getenv("MQAPPLNAME", "API-APP-GO"),
 		Channel:          getenv("IBM_MQ_CHANNEL", "DEV.APP.SVRCONN"),
 		QueueManager:     getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
 		Username:         getenv("IBM_MQ_USERNAME", "app"),
