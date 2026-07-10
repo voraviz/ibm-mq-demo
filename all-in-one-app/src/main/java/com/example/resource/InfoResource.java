@@ -11,10 +11,12 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-
+import org.jboss.logging.Logger;
 @Path("/api/info")
 @Produces(MediaType.APPLICATION_JSON)
 public class InfoResource {
+
+    private static final Logger LOG = Logger.getLogger(InfoResource.class);
 
     @Inject
     MQConfig mqConfig;
@@ -42,6 +44,8 @@ public class InfoResource {
                     host = resolvedHost;
                 }
                 port = resolvedPort;
+                LOG.info("MQ Server Host:"+host+" ("+port+")");
+                
             }
         } catch (Exception ignored) {
         }
