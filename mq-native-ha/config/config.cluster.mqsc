@@ -1,0 +1,46 @@
+* ================================================
+* Channel Definition
+* ================================================
+DEFINE CHANNEL('DEV.APP.SVRCONN') CHLTYPE(SVRCONN) TRPTYPE(TCP) MCAUSER('app') REPLACE
+
+* ================================================
+* Uniform Cluster Receiver Channel (Dynamic)
+* ================================================
+DEFINE CHANNEL('+AUTOCL+_+QMNAME+') CHLTYPE(CLUSRCVR) TRPTYPE(TCP) CONNAME('+CONNAME+') CLUSTER('+AUTOCL+') REPLACE
+
+* ================================================
+* Queues
+* ================================================
+DEFINE QLOCAL('DEV.DEMO.QL.IN') DEFPSIST(YES) REPLACE
+DEFINE QLOCAL('DEV.DEMO.QL.OUT') DEFPSIST(YES) REPLACE
+DEFINE QLOCAL('DEV.DEMO.QL.DEAD') DEFPSIST(YES) REPLACE
+
+* ================================================
+* Channel Authentication
+* ================================================
+SET CHLAUTH('DEV.APP.SVRCONN') TYPE(BLOCKUSER) USERLIST('nobody') ACTION(REPLACE)
+* SET CHLAUTH('DEV.APP.SVRCONN') TYPE(USERMAP) CLNTUSER('app') MCAUSER('app') ACTION(REPLACE)
+SET CHLAUTH('DEV.APP.SVRCONN') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(CHANNEL) ACTION(REPLACE)
+SET CHLAUTH('UNIQA_*') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(CHANNEL) ACTION(ADD)
+* ================================================
+* Connection Authentication
+* ================================================
+ALTER AUTHINFO(SYSTEM.DEFAULT.AUTHINFO.IDPWOS) AUTHTYPE(IDPWOS) CHCKCLNT(REQUIRED) CHCKLOCL(OPTIONAL)
+REFRESH SECURITY TYPE(CONNAUTH)
+
+* ================================================
+* Object Authority
+* ================================================
+* Queue Manager connect permission
+SET AUTHREC OBJTYPE(QMGR) PRINCIPAL('app') AUTHADD(CONNECT,INQ)
+
+* Grant app full access to all DEV.* queues
+SET AUTHREC PROFILE('DEV.*') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(PUT,GET,INQ,BROWSE)
+
+* Restrict access to dead letter queue — GET only
+SET AUTHREC PROFILE('DEV.DEMO.QL.DEAD') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(GET,INQ,BROWSE)
+SET AUTHREC PROFILE('DEV.DEMO.QL.DEAD') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHRMV(PUT)
+
+* Channel access
+SET AUTHREC PROFILE('DEV.APP.SVRCONN') +
+OBJTYPE(CHANNEL) PRINCIPAL('app') AUTHADD(ALL)
