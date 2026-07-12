@@ -24,6 +24,7 @@ ibm-mq-demo/
 │   ├── ui/               #   Vue 3 + Vite frontend
 │   └── etc/              #   OTEL Collector config + startup script
 ├── native-ha.md          # Native HA setup and failover walkthrough
+├── ccdt                  # IBM MQ  client channel definition tables - CCDT 
 ├── Metrics-and-OTEL.md   # Observability guide (WIP)
 └── README.md
 ```
