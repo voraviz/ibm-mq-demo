@@ -17,6 +17,8 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
     - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
   - [Test Applications](#test-applications)
     - [All-in-one Java Application](#all-in-one-java-application)
+    - [Golang REST API](#golang-rest-api)
+    - [Golang JMS REST API](#golang-jms-rest-api)
   - [Failover Test](#failover-test)
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
@@ -267,7 +269,16 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
         "connection": [
           {"host": "127.0.0.1", "port": 1414},
           {"host": "127.0.0.1", "port": 1415},
-          {"host": "127.0.0.1", "port": 1416},
+          {"host": "127.0.0.1", "port": 1416}
+        ],
+        "queueManager": "UNIQA"
+      },
+      "type": "clientConnection"
+    },
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
           {"host": "127.0.0.1", "port": 1417},
           {"host": "127.0.0.1", "port": 1418},
           {"host": "127.0.0.1", "port": 1419}
@@ -280,13 +291,24 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
 }
 ```
 
-> **`*UNIQA` vs `UNIQA`:** The application sets `ibm.mq.queue-manager=*UNIQA`. The asterisk prefix instructs the MQ client to accept a connection from *any* queue manager whose name starts with `UNIQA` — this covers both `QM1` and `QM2`. The CCDT file itself uses `queueManager: "UNIQA"` as the cluster name for channel resolution.
+> **`*UNIQA` vs `UNIQA`:**
+> - **Java** (`all-in-one-app`): set `ibm.mq.queue-manager=*UNIQA`. The asterisk prefix is handled natively by the IBM MQ JMS client.
+> - **Go** (`api-app-go`, `api-app-go-jms20`): set `IBM_MQ_QUEUE_MANAGER=*UNIQA`. The Go MQI C client also accepts the `*` prefix when a CCDT is used.
+> - The CCDT file itself uses `queueManager: "UNIQA"` (no asterisk) as the cluster name for channel resolution.
+>
+> **Go CCDT path:** The Go MQI C library requires an **absolute** `file:///path` URL. A relative `file:../ccdt/...` silently fails and produces `MQRC_Q_MGR_NAME_ERROR (2058)`. Both Go apps call `resolveCcdtUrl()` which automatically converts any relative path to absolute.
 
 ---
 
 ## Test Applications
 
-All applications in this section connect to the Uniform Cluster using the **CCDT** file. The queue manager is set to `*UNIQA` so the client accepts connections from either `QM1` or `QM2`.
+All applications connect to the Uniform Cluster using the **CCDT** file ([`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)) and the queue manager name `*UNIQA` so the client accepts connections from either `QM1` or `QM2`.
+
+| Application | Language | `BALANCED` | Notes |
+|---|---|---|---|
+| `all-in-one-app` | Java JMS | `YES` / `NO` | Full cluster rebalancing supported |
+| `api-app-go` | Go MQI C | `NOTAPPLIC` | HA failover works; rebalancing not supported by MQI C |
+| `api-app-go-jms20` | Go MQI C | `NOTAPPLIC` | Same as `api-app-go` — JMS20 wraps MQI C, not Java JMS |
 
 ### All-in-one Java Application
 
@@ -354,6 +376,84 @@ AMQ8932I: Display application status details.
 > - `CLUSTER(UNIQA)` — confirms the connection is cluster-aware (compare to `CLUSTER( )` in a plain Native HA setup).
 > - `MOVCOUNT(1)` — the cluster has moved this application connection once to balance load.
 > - `BALANCED(NO)` — the cluster is still rebalancing; it becomes `YES` once load is distributed evenly.
+
+---
+
+### Golang REST API
+
+[`api-app-go`](api-app-go) is a standalone Go REST API backend. Pair it with the [`ui-app`](ui-app) Vue.js frontend.
+
+**Configure and run with CCDT:**
+
+```bash
+cd api-app-go
+export IBM_MQ_CCDT_URL=file:../ccdt/ccdt.cluster.json
+export IBM_MQ_QUEUE_MANAGER='*UNIQA'
+./api-app-go
+```
+
+> `IBM_MQ_CCDT_URL` must be exported before running — it is not read from a config file. The Go app automatically resolves the relative `file:` path to an absolute `file:///...` form.
+
+**Application log:**
+
+- Use CCDT:
+```log
+2026/07/12 17:30:01 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt/ccdt.cluster.json user=app
+```
+
+**Check application status:**
+
+```bash
+podman exec mq-node-1 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
+podman exec mq-node-4 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
+```
+
+```
+AMQ8932I: Display application status details.
+   APPLNAME(API-APP-GO)                    CLUSTER(UNIQA)
+   COUNT(1)                                MOVCOUNT(0)
+   BALANCED(NOTAPPLIC)                     TYPE(APPL)
+```
+
+> `BALANCED(NOTAPPLIC)` is expected for Go apps — the MQI C client does not participate in IBM MQ's application rebalancing protocol. `CLUSTER(UNIQA)` confirms the connection is cluster-aware. HA failover via `MQCNO_RECONNECT` still works across both groups.
+
+---
+
+### Golang JMS REST API
+
+[`api-app-go-jms20`](api-app-go-jms20) is a Go REST API using the JMS20-style `mq-golang-jms20` library. Functionally identical to `api-app-go` at the MQ level — both use MQI C bindings underneath.
+
+**Configure and run with CCDT:**
+
+```bash
+cd api-app-go-jms20
+export IBM_MQ_CCDT_URL=file:../ccdt/ccdt.cluster.json
+export IBM_MQ_QUEUE_MANAGER='*UNIQA'
+./api-app-go-jms20
+```
+
+**Application log:**
+
+- Use CCDT:
+```log
+2026/07/12 17:30:01 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt/ccdt.cluster.json user=app
+```
+
+**Check application status:**
+
+```bash
+podman exec mq-node-1 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
+podman exec mq-node-4 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
+```
+
+```
+AMQ8932I: Display application status details.
+   APPLNAME(API-APP-GO-JMS20)              CLUSTER(UNIQA)
+   COUNT(1)                                MOVCOUNT(0)
+   BALANCED(NOTAPPLIC)                     TYPE(APPL)
+```
+
+> Same `BALANCED(NOTAPPLIC)` behaviour as `api-app-go` — `mq-golang-jms20` wraps MQI C, not the Java JMS provider, so application rebalancing is not available.
 
 ---
 
