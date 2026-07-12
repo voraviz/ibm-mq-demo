@@ -21,9 +21,10 @@ public class MQConnectionFactoryProducer {
     public ConnectionFactory connectionFactory() throws JMSException {
         MQConnectionFactory factory = new MQConnectionFactory();
 
-        if (!config.ccdtUrl().isBlank()) {
-            factory.setStringProperty(WMQConstants.WMQ_CCDTURL, config.ccdtUrl());
-            LOG.info("Use CCDT: " + config.ccdtUrl());
+        String ccdtUrl = config.ccdtUrl().filter(s -> !s.isBlank()).orElse(null);
+        if (ccdtUrl != null) {
+            factory.setStringProperty(WMQConstants.WMQ_CCDTURL, ccdtUrl);
+            LOG.info("Use CCDT: " + ccdtUrl);
             LOG.debug("CCDT URL set — skipping connectionList and channel");
         } else {
             factory.setConnectionNameList(config.connectionList());

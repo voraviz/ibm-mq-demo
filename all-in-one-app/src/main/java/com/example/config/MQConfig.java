@@ -1,14 +1,16 @@
 package com.example.config;
+
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import io.smallrye.config.WithName;
+
+import java.util.Optional;
 
 @ConfigMapping(prefix = "ibm.mq")
 public interface MQConfig {
 
     @WithName("ccdt-url")
-    @WithDefault("")
-    String ccdtUrl();
+    Optional<String> ccdtUrl();
 
     @WithDefault("")
     String connectionList();
