@@ -5,8 +5,8 @@ This repository demonstrates IBM MQ capabilities across three areas:
 | Capability | Guide | Status |
 |---|---|---|
 | **Native HA** | [native-ha.md](native-ha.md) | ✅ Available |
-| **Uniform Cluster** | uniform-cluster.md | 🚧 Work in progress |
-| **Observability** | metrics-and-otel.md | 🚧 Work in progress |
+| **Native HA + Uniform Cluster** | [native-ha-with-uniform-cluster.md](native-ha-with-uniform-cluster.md) | ✅ Available |
+| **Observability** | [Metrics-and-OTEL.md](Metrics-and-OTEL.md) | 🚧 Work in progress |
 
 ---
 
@@ -23,9 +23,10 @@ ibm-mq-demo/
 │   ├── api/              #   Quarkus API with quarkus-opentelemetry
 │   ├── ui/               #   Vue 3 + Vite frontend
 │   └── etc/              #   OTEL Collector config + startup script
-├── native-ha.md          # Native HA setup and failover walkthrough
-├── ccdt                  # IBM MQ  client channel definition tables - CCDT 
-├── Metrics-and-OTEL.md   # Observability guide (WIP)
+├── native-ha.md                        # Native HA setup and failover walkthrough
+├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
+├── ccdt/                               # CCDT JSON files (nativeha + cluster)
+├── Metrics-and-OTEL.md                 # Observability guide (WIP)
 └── README.md
 ```
 
@@ -39,9 +40,11 @@ Three-node IBM MQ cluster with automatic failover using the Raft consensus proto
 
 ---
 
-## Uniform Cluster
+## Native HA + Uniform Cluster
 
-> 🚧 **Work in progress**
+Two Native HA groups (`QM1` and `QM2`, three nodes each) joined into a single **Uniform Cluster** (`UNIQA`). The cluster distributes client connections evenly across both queue managers and automatically rebalances when a node or an entire HA group fails. Applications connect using a CCDT file covering all six nodes with queue manager set to `*UNIQA`.
+
+→ See **[native-ha-with-uniform-cluster.md](native-ha-with-uniform-cluster.md)**
 
 ---
 
@@ -51,4 +54,4 @@ Three-node IBM MQ cluster with automatic failover using the Raft consensus proto
 
 Planned coverage: Prometheus metrics, OpenTelemetry distributed tracing, Grafana dashboards, and Jaeger trace UI.
 
-→ See **[Metrics-and-OTEL.md](metrics-and-otel.md)** for current notes.
+→ See **[Metrics-and-OTEL.md](Metrics-and-OTEL.md)** for current notes.
