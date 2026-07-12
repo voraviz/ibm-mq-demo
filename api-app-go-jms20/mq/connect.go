@@ -13,20 +13,16 @@ import (
 // newConnectionFactory builds a JMS20 ConnectionFactory from cfg.
 //
 // The JMS20 library's ConnectionFactoryImpl only supports a single
-// Hostname+PortNumber in its struct. For multi-host Native HA, we use an
-// MQOptions callback to override cd.ConnectionName with the full connection
-// list and set MQCNO_RECONNECT_Q_MGR so the client library automatically
-// fails over to the active HA node — identical to api-app-go's connect.go.
+// Hostname+PortNumber in its struct. For multi-host Native HA or CCDT, we use
+// an MQOptions callback (connectOption) to set the full connection details on
+// the MQCNO at connect time — identical in behaviour to api-app-go's connect.go.
 func newConnectionFactory(cfg *config.Config) jms20subset.ConnectionFactory {
-	// The primary host/port are used by ConnectionFactoryImpl to build the
-	// initial MQCD. When a ConnectionList is provided, the MQOptions callback
-	// in multiHostOption() overwrites ConnectionName with the full list.
+	// ConnectionFactoryImpl requires a Hostname+PortNumber even when CCDT is
+	// used — use the first entry of the connection list or the host/port config
+	// as a placeholder; the connectOption callback overrides it at connect time.
 	host := cfg.Host
 	port := cfg.Port
 	if cfg.ConnectionList != "" {
-		// Parse the first entry of the list to satisfy ConnectionFactoryImpl's
-		// required Hostname/PortNumber fields; the MQOptions callback replaces
-		// the actual connection string at connect time.
 		if entries := parseConnEntries(cfg.ConnectionList); len(entries) > 0 {
 			host = entries[0].host
 			port = entries[0].port
@@ -42,8 +38,13 @@ func newConnectionFactory(cfg *config.Config) jms20subset.ConnectionFactory {
 		Password:    cfg.Password,
 	}
 
-	log.Printf("MQ connect: qmgr=%s conn=%s channel=%s user=%s",
-		cfg.QueueManager, connectionName(cfg), cfg.Channel, cfg.Username)
+	if cfg.CcdtUrl != "" {
+		log.Printf("MQ connect: qmgr=%s ccdt=%s user=%s",
+			cfg.QueueManager, cfg.CcdtUrl, cfg.Username)
+	} else {
+		log.Printf("MQ connect: qmgr=%s conn=%s channel=%s user=%s",
+			cfg.QueueManager, connectionName(cfg), cfg.Channel, cfg.Username)
+	}
 
 	return cf
 }
@@ -56,20 +57,22 @@ func connectionName(cfg *config.Config) string {
 	return fmt.Sprintf("%s(%d)", cfg.Host, cfg.Port)
 }
 
-// multiHostOption returns an MQOptions function that overrides ConnectionName
-// with the full multi-host list and enables MQCNO_RECONNECT_Q_MGR so the
-// MQ client library automatically reconnects to the active HA node on failure.
-func multiHostOption(cfg *config.Config) jms20subset.MQOptions {
-	connName := connectionName(cfg)
+// connectOption returns an MQOptions callback that applies the correct
+// connection strategy at connect time:
+//   - CCDT: sets cno.CCDTUrl; channel and connection list come from the file.
+//   - Connection list: overwrites cno.ClientConn.ConnectionName with the full
+//     multi-host list and enables MQCNO_RECONNECT_Q_MGR for automatic HA failover.
+func connectOption(cfg *config.Config) jms20subset.MQOptions {
 	return func(cno *ibmmq.MQCNO) {
-		// Override the ConnectionName set by ConnectionFactoryImpl with the
-		// full multi-host list (e.g. "host1(1414),host2(1414),host3(1414)").
-		cno.ClientConn.ConnectionName = connName
-		// Enable automatic reconnect across the multi-host list.
-		// MQCNO_RECONNECT_Q_MGR keeps the client on the same queue manager
-		// across HA failover, matching api-app-go behaviour.
 		cno.Options |= ibmmq.MQCNO_RECONNECT_Q_MGR
-		// Match the heartbeat/reconnect timeout from config.
-		cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+		if cfg.CcdtUrl != "" {
+			// CCDT takes precedence — channel and connection list are read
+			// from the CCDT file; no ConnectionName override is needed.
+			cno.CCDTUrl = cfg.CcdtUrl
+		} else {
+			// Override ConnectionName with the full multi-host list.
+			cno.ClientConn.ConnectionName = connectionName(cfg)
+			cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+		}
 	}
 }

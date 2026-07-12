@@ -32,7 +32,7 @@ func (p *Producer) Put(text string) (string, error) {
 	n := p.counter.Add(1)
 	body := fmt.Sprintf("[#%d] %s", n, text)
 
-	ctx, jmsErr := p.cf.CreateContext(multiHostOption(p.cfg))
+	ctx, jmsErr := p.cf.CreateContext(connectOption(p.cfg))
 	if jmsErr != nil {
 		p.counter.Add(-1)
 		return "", fmt.Errorf("MQ connect: %s", jmsErr.Error())

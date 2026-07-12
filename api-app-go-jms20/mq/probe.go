@@ -59,7 +59,7 @@ func resolveActiveNode(cfg *config.Config) (string, int) {
 		singleCfg.ConnectionList = ""
 
 		singleCF := newConnectionFactory(&singleCfg)
-		ctx, jmsErr := singleCF.CreateContext(multiHostOption(&singleCfg))
+		ctx, jmsErr := singleCF.CreateContext(connectOption(&singleCfg))
 		if jmsErr != nil {
 			continue
 		}
@@ -76,7 +76,7 @@ func resolveActiveNode(cfg *config.Config) (string, int) {
 // Returns a ProbeResult on success, or an error if the connection fails.
 func Probe(cfg *config.Config) (ProbeResult, error) {
 	cf := newConnectionFactory(cfg)
-	ctx, jmsErr := cf.CreateContext(multiHostOption(cfg))
+	ctx, jmsErr := cf.CreateContext(connectOption(cfg))
 	if jmsErr != nil {
 		return ProbeResult{}, jmsErr
 	}

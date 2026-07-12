@@ -9,6 +9,7 @@ import (
 // variables; defaults mirror api-app/src/main/resources/application.properties.
 type Config struct {
 	// IBM MQ connection
+	CcdtUrl          string // IBM_MQ_CCDT_URL — if set, overrides ConnectionList + Channel
 	ConnectionList   string // IBM_MQ_CONNECTION_LIST
 	Host             string // IBM_MQ_HOST
 	Port             int    // IBM_MQ_PORT
@@ -43,6 +44,7 @@ func getenvInt(key string, def int) int {
 // Load reads configuration from environment variables with defaults.
 func Load() *Config {
 	return &Config{
+		CcdtUrl:          getenv("IBM_MQ_CCDT_URL", ""),
 		ConnectionList:   getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
 		Host:             getenv("IBM_MQ_HOST", "localhost"),
 		Port:             getenvInt("IBM_MQ_PORT", 1414),

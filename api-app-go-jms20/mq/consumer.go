@@ -87,7 +87,7 @@ func (c *Consumer) GetCount() int64 {
 // openResources creates the JMSContext and JMSConsumer.
 // Must be called with c.mu held.
 func (c *Consumer) openResources() error {
-	ctx, jmsErr := c.cf.CreateContext(multiHostOption(c.cfg))
+	ctx, jmsErr := c.cf.CreateContext(connectOption(c.cfg))
 	if jmsErr != nil {
 		return jmsErr
 	}
