@@ -31,8 +31,12 @@ public class InfoResource {
         String host = "";
         int port = 0;
 
+        LOG.debug("Requesting MQ info — configured queueManager: " + queueManager);
+
         try (Connection connection = connectionFactory.createConnection()) {
             connected = true;
+            LOG.debug("MQ connection established successfully");
+
             if (connection instanceof JmsConnection jmsConnection) {
                 String resolvedQueueManager = jmsConnection.getStringProperty(WMQConstants.WMQ_RESOLVED_QUEUE_MANAGER);
                 String resolvedHost = jmsConnection.getStringProperty(WMQConstants.WMQ_HOST_NAME);
@@ -44,12 +48,14 @@ public class InfoResource {
                     host = resolvedHost;
                 }
                 port = resolvedPort;
-                LOG.info("MQ Server Host:"+host+" ("+port+")");
-                
+                LOG.debug("MQ Server Host: " + host + " (" + port + "), resolvedQueueManager: " + queueManager);
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOG.warn("MQ connection failed: " + e.getMessage());
         }
 
+        LOG.debug("InfoResponse: connected=" + connected + ", queueManager=" + queueManager
+                + ", host=" + host + ", port=" + port);
         return Response.ok(new InfoResponse(queueManager, host, port, connected)).build();
     }
 
