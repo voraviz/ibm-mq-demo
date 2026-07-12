@@ -18,6 +18,8 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Test Applications](#test-applications)
     - [All-in-one Java Application](#all-in-one-java-application)
   - [Failover Test](#failover-test)
+    - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
+    - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
 
 ---
 
@@ -31,27 +33,27 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
                     +------------------------------------------+
                                         │
           ┌─────────────────────────────┴─────────────────────────────┐
-          │  Uniform Cluster UNIQA                                     │
-          │  (workload balanced across both HA groups)                 │
-          │                                                            │
-          │  ┌──────────── HA-GROUP-1 (QM1) ────────────┐             │
-          │  │                                           │             │
-          │  │  mq-node-1     mq-node-2     mq-node-3   │             │
-          │  │  port: 1414    port: 1415    port: 1416   │             │
-          │  │  (ACTIVE)      (Replica)     (Replica)    │             │
-          │  │                                           │             │
-          │  │  Raft replication ──────────────────────► │             │
-          │  └───────────────────────────────────────────┘             │
-          │                                                            │
-          │  ┌──────────── HA-GROUP-2 (QM2) ────────────┐             │
-          │  │                                           │             │
-          │  │  mq-node-4     mq-node-5     mq-node-6   │             │
-          │  │  port: 1417    port: 1418    port: 1419   │             │
-          │  │  (ACTIVE)      (Replica)     (Replica)    │             │
-          │  │                                           │             │
-          │  │  Raft replication ──────────────────────► │             │
-          │  └───────────────────────────────────────────┘             │
-          └────────────────────────────────────────────────────────────┘
+          │  Uniform Cluster UNIQA                                    │
+          │  (workload balanced across both HA groups)                │
+          │                                                           │
+          │  ┌──────────── HA-GROUP-1 (QM1) ─────────────┐            │
+          │  │                                           │            │
+          │  │  mq-node-1     mq-node-2     mq-node-3    │            │
+          │  │  port: 1414    port: 1415    port: 1416   │            │
+          │  │  (ACTIVE)      (Replica)     (Replica)    │            │
+          │  │                                           │            │
+          │  │  Raft replication ──────────────────────► │            │
+          │  └───────────────────────────────────────────┘            │
+          │                                                           │
+          │  ┌──────────── HA-GROUP-2 (QM2) ─────────────┐            │
+          │  │                                           │            │
+          │  │  mq-node-4     mq-node-5     mq-node-6    │            │
+          │  │  port: 1417    port: 1418    port: 1419   │            │
+          │  │  (ACTIVE)      (Replica)     (Replica)    │            │
+          │  │                                           │            │
+          │  │  Raft replication ──────────────────────► │            │
+          │  └───────────────────────────────────────────┘            │
+          └───────────────────────────────────────────────────────────┘
 ```
 
 > **Key difference from Native HA:** In a plain Native HA setup the client must reconnect to the *same* queue manager after failover. In a Uniform Cluster the client connects to the cluster name (`*UNIQA`) and the cluster redistributes connections across both HA groups dynamically.
