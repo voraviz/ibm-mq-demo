@@ -29,7 +29,8 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
                     +------------------------------------------+
                     |          Client Applications             |
                     |   Connects via Connection Name List      |
-                    |  localhost(1414),localhost(1415),(1416)  |
+                    |  localhost(1414),localhost(1415),        |
+                    |             localhost(1416)              |
                     +------------------------------------------+
                                         │
             ┌───────────────────────────┼───────────────────────────┐
@@ -308,7 +309,7 @@ Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
 }
 ```
 
-**[`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)** — for Native HA + Uniform Cluster (6 nodes, queue manager `UNIQA`):
+<!-- **[`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)** — for Native HA + Uniform Cluster (6 nodes, queue manager `UNIQA`):
 
 ```json
 {
@@ -330,7 +331,7 @@ Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
     }
   ]
 }
-```
+``` -->
 
 > **Note:** The `queueManager` field in the CCDT matches the queue manager the client connects to. Use `QM1` for Native HA and `UNIQA` (or `*UNIQA`) for a Uniform Cluster — the asterisk prefix tells the client to accept any queue manager whose name starts with `UNIQA`.
 
@@ -439,7 +440,7 @@ AMQ8932I: Display application status details.
    COUNT(1)                                MOVCOUNT(0)
    BALANCED(NOTAPPLIC)
 ```
-**Application Log***
+**Application Log**
 - Use Connection List
 ```log
 2026-07-12 10:19:08,192 INFO  [com.example.config.MQConnectionFactoryProducer] (Quarkus Main Thread) Use Connection List: localhost(1414),localhost(1415),localhost(1416)
