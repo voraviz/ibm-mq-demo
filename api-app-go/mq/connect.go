@@ -3,29 +3,48 @@ package mq
 import (
 	"fmt"
 	"log"
+	"path/filepath"
+	"strings"
 
 	"github.com/ibm-messaging/ibm_mq/api-app-go/config"
 	"github.com/ibm-messaging/mq-golang/v5/ibmmq"
 )
+
+// resolveCcdtUrl normalizes a possibly-relative "file:" CCDT URL into an
+// absolute "file:///..." form. The Go/C client requires an absolute path —
+// a relative reference silently fails to load and produces MQRC 2058.
+func resolveCcdtUrl(url string) string {
+	const prefix = "file:"
+	if !strings.HasPrefix(url, prefix) {
+		return url
+	}
+	path := strings.TrimPrefix(url, prefix)
+	if strings.HasPrefix(path, "///") {
+		return url
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return url
+	}
+	return prefix + "///" + strings.TrimPrefix(abs, "/")
+}
 
 // connect opens a client connection to IBM MQ using MQCNO + MQCD + MQCSP.
 // The caller is responsible for calling qmgr.Disc() when done.
 func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
 	cno := ibmmq.NewMQCNO()
 	cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
-		// MQCNO_RECONNECT_Q_MGR: on disconnect, the client library automatically
-		// retries every address in ConnectionName (or CCDT) to find the active
-		// node — Get/Put calls block transparently during failover.
-		// Use this (not MQCNO_RECONNECT) with a multi-host list or CCDT.
-		ibmmq.MQCNO_RECONNECT_Q_MGR
+		// MQCNO_RECONNECT: allows reconnect within a Native HA group (failover)
+		// AND across queue managers in a Uniform Cluster (balancing).
+		// MQCNO_RECONNECT_Q_MGR would block cross-QM balancing entirely.
+		ibmmq.MQCNO_RECONNECT
 
 	connDesc := ""
 	if cfg.CcdtUrl != "" {
-		// CCDT takes precedence — channel name and connection list are read
-		// from the CCDT file; no MQCD is needed.
-		cno.CCDTUrl = cfg.CcdtUrl
-		connDesc = cfg.CcdtUrl
-		log.Printf("MQ connect: qmgr=%s ccdt=%s user=%s", cfg.QueueManager, cfg.CcdtUrl, cfg.Username)
+		resolved := resolveCcdtUrl(cfg.CcdtUrl)
+		cno.CCDTUrl = resolved
+		connDesc = resolved
+		log.Printf("MQ connect: qmgr=%s ccdt=%s user=%s", cfg.QueueManager, resolved, cfg.Username)
 	} else {
 		cd := ibmmq.NewMQCD()
 		cd.ChannelName = cfg.Channel
@@ -34,15 +53,15 @@ func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
 		} else {
 			cd.ConnectionName = fmt.Sprintf("%s(%d)", cfg.Host, cfg.Port)
 		}
-		// HeartbeatInterval controls how quickly a dead or unresponsive connection
-		// is detected. Setting it equal to the reconnect timeout (IBM_MQ_RECONNECT_TIMEOUT,
-		// default 30 s) matches Java's WMQ_CLIENT_RECONNECT_TIMEOUT behaviour: a
-		// stalled reconnect attempt is abandoned after this many seconds.
 		cd.HeartbeatInterval = int32(cfg.ReconnectTimeout)
 		cno.ClientConn = cd
 		connDesc = cd.ConnectionName
 		log.Printf("MQ connect: qmgr=%s conn=%s channel=%s user=%s", cfg.QueueManager, cd.ConnectionName, cd.ChannelName, cfg.Username)
 	}
+
+	// ApplName identifies this app to MQ for Uniform Cluster balancing grouping
+	// and DISPLAY APSTATUS('<name>') lookups.
+	cno.ApplName = cfg.AppName
 
 	// Authentication
 	csp := ibmmq.NewMQCSP()
