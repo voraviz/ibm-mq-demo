@@ -14,6 +14,7 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
     - [Native HA Node Configuration](#native-ha-node-configuration)
     - [Start Containers](#start-containers)
     - [Verify the Cluster](#verify-the-cluster)
+    - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
   - [Test Applications](#test-applications)
     - [All-in-one Java Application](#all-in-one-java-application)
     - [Golang REST API](#golang-rest-api)
@@ -70,7 +71,7 @@ podman network create mq-ha-net
 Create one persistent volume per node. The script removes existing volumes before re-creating them so you can re-run it on a clean slate:
 
 ```bash
-for i in mq-node1-data mq-node2-data mq-node3-data; do
+for i in mq-node-1-data mq-node-2-data mq-node-3-data; do
   podman volume exists $i && podman volume rm $i
   podman volume create $i
 done
@@ -134,7 +135,7 @@ podman run -d \
   -p 1414:1414 \
   -p 9443:9443 \
   -p 9157:9157 \
-  -v mq-node1-data:/var/mqm \
+  -v mq-node-1-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node1.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
   -e LICENSE=accept \
@@ -154,7 +155,7 @@ podman run -d \
   -p 1415:1414 \
   -p 9444:9443 \
   -p 9158:9157 \
-  -v mq-node2-data:/var/mqm \
+  -v mq-node-2-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node2.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
   -e LICENSE=accept \
@@ -174,7 +175,7 @@ podman run -d \
   -p 1416:1414 \
   -p 9445:9443 \
   -p 9159:9157 \
-  -v mq-node3-data:/var/mqm \
+  -v mq-node-3-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node3.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
   -e LICENSE=accept \
@@ -273,6 +274,66 @@ Response from a **replica** node:
 }
 ```
 
+### CCDT (Client Channel Definition Table)
+
+A **Client Channel Definition Table (CCDT)** is a JSON file that describes the MQ channel and connection endpoints the client should use. It is an alternative to specifying `connectionList` and `channel` separately in `application.properties` — the client reads both from the CCDT file instead.
+
+| | Connection List | CCDT |
+|---|---|---|
+| Config location | `application.properties` | JSON file on disk (or URL) |
+| Channel | Set separately (`ibm.mq.channel`) | Embedded in the JSON |
+| Multi-host | Comma-separated list | Array of `connection` objects |
+| When to use | Simple setups, local dev | Production, shared config, uniform cluster |
+
+Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
+
+**[`ccdt/ccdt.nativeha.json`](ccdt/ccdt.nativeha.json)** — for Native HA (3 nodes, queue manager `QM1`):
+
+```json
+{
+  "channel": [
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
+          {"host": "127.0.0.1", "port": 1414},
+          {"host": "127.0.0.1", "port": 1415},
+          {"host": "127.0.0.1", "port": 1416}
+        ],
+        "queueManager": "QM1"
+      },
+      "type": "clientConnection"
+    }
+  ]
+}
+```
+
+**[`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)** — for Native HA + Uniform Cluster (6 nodes, queue manager `UNIQA`):
+
+```json
+{
+  "channel": [
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
+          {"host": "127.0.0.1", "port": 1414},
+          {"host": "127.0.0.1", "port": 1415},
+          {"host": "127.0.0.1", "port": 1416},
+          {"host": "127.0.0.1", "port": 1417},
+          {"host": "127.0.0.1", "port": 1418},
+          {"host": "127.0.0.1", "port": 1419}
+        ],
+        "queueManager": "UNIQA"
+      },
+      "type": "clientConnection"
+    }
+  ]
+}
+```
+
+> **Note:** The `queueManager` field in the CCDT matches the queue manager the client connects to. Use `QM1` for Native HA and `UNIQA` (or `*UNIQA`) for a Uniform Cluster — the asterisk prefix tells the client to accept any queue manager whose name starts with `UNIQA`.
+
 ---
 
 ## Test Applications
@@ -283,17 +344,34 @@ Both applications connect via a **connection name list** covering all three node
 
 [`all-in-one-app`](all-in-one-app) is a Quarkus/JMS backend with a bundled Vue.js frontend.
 
-**Connection name list** — [`application.properties`](all-in-one-app/src/main/resources/application.properties):
+The app supports two connection modes — **connection list** (default) and **CCDT**. The mode is selected at startup based on whether `ibm.mq.ccdt-url` is set. If it is present and non-blank, CCDT is used; otherwise the connection list and channel are used.
+
+**Option A — Connection list (default)** — [`application.properties`](all-in-one-app/src/main/resources/application.properties):
 
 ```properties
+# ibm.mq.ccdt-url is commented out — connection list is active
 ibm.mq.connection-list=localhost(1414),localhost(1415),localhost(1416)
+ibm.mq.channel=DEV.APP.SVRCONN
+ibm.mq.queue-manager=QM1
 ```
 
-**Automatic reconnect** — [`MQConnectionFactoryProducer.java`](all-in-one-app/src/main/java/com/example/config/MQConnectionFactoryProducer.java):
+**Option B — CCDT** — uncomment `ibm.mq.ccdt-url` and comment out `connection-list` and `channel`:
+
+```properties
+ibm.mq.ccdt-url=file:ccdt/ccdt.nativeha.json
+#ibm.mq.connection-list=localhost(1414),localhost(1415),localhost(1416)
+#ibm.mq.channel=DEV.APP.SVRCONN
+ibm.mq.queue-manager=QM1
+```
+
+> The CCDT file embeds the channel name and all connection endpoints, so `connection-list` and `channel` are ignored when `ccdt-url` is set.
+
+**Connection factory** — [`MQConnectionFactoryProducer.java`](all-in-one-app/src/main/java/com/example/config/MQConnectionFactoryProducer.java):
 
 ```java
 @ApplicationScoped
 public class MQConnectionFactoryProducer {
+    private static final Logger LOG = Logger.getLogger(MQConnectionFactoryProducer.class);
 
     @Inject
     MQConfig config;
@@ -302,14 +380,25 @@ public class MQConnectionFactoryProducer {
     @ApplicationScoped
     public ConnectionFactory connectionFactory() throws JMSException {
         MQConnectionFactory factory = new MQConnectionFactory();
-        factory.setConnectionNameList(config.connectionList());
-        factory.setChannel(config.channel());
+
+        // ccdtUrl() returns Optional<String> — present and non-blank means use CCDT
+        String ccdtUrl = config.ccdtUrl().filter(s -> !s.isBlank()).orElse(null);
+        if (ccdtUrl != null) {
+            factory.setStringProperty(WMQConstants.WMQ_CCDTURL, ccdtUrl);
+            LOG.info("Use CCDT: " + ccdtUrl);
+        } else {
+            factory.setConnectionNameList(config.connectionList());
+            factory.setChannel(config.channel());
+            LOG.info("Use Connection List: " + config.connectionList());
+        }
+
         factory.setQueueManager(config.queueManager());
-        factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
+        factory.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
+        factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
         // WMQ_CLIENT_RECONNECT retries indefinitely across all hosts in the
-        // connection name list until the active node is found.
+        // connection name list (or CCDT) until the active node is found.
         // WMQ_CLIENT_RECONNECT_TIMEOUT caps each individual reconnect attempt.
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, 30);
@@ -336,6 +425,32 @@ podman run -p 8080:8080 \
 Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
 
 ![Application connected to mq-node-2](images/mq-app.png)
+
+**Check APP status**
+- Run runmqsc at active node
+```bash
+podman exec mq-node-1 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
+```
+Output
+```bash
+1 : DISPLAY APSTATUS(*)
+AMQ8932I: Display application status details.
+   APPLNAME(all-in-one)                    CLUSTER( )
+   COUNT(1)                                MOVCOUNT(0)
+   BALANCED(NOTAPPLIC)
+```
+**Application Log***
+- Use Connection List
+```log
+2026-07-12 10:19:08,192 INFO  [com.example.config.MQConnectionFactoryProducer] (Quarkus Main Thread) Use Connection List: localhost(1414),localhost(1415),localhost(1416)
+```
+- Connect to QM1 
+```log
+2026-07-12 10:19:55,047 DEBUG [com.example.resource.InfoResource] (executor-thread-1) Requesting MQ info — configured queueManager: QM1
+2026-07-12 10:19:55,093 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ connection established successfully
+2026-07-12 10:19:55,094 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ Server Host: localhost/127.0.0.1 (1414), resolvedQueueManager: QM1
+2026-07-12 10:19:55,112 DEBUG [com.example.resource.InfoResource] (executor-thread-1) InfoResponse: connected=true, queueManager=QM1, host=localhost/127.0.0.1, port=1414
+```
 
 **Frontend resilience during failover — `sendOneWithRetry()`**
 
