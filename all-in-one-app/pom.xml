@@ -45,6 +45,12 @@
       <artifactId>quarkus-rest-jackson</artifactId>
     </dependency>
 
+    <!-- OpenAPI / Swagger UI -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-openapi</artifactId>
+    </dependency>
+
     <!-- SmallRye Reactive Messaging core -->
     <dependency>
       <groupId>io.quarkus</groupId>
