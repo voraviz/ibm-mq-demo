@@ -68,20 +68,42 @@ func connectionName(cfg *config.Config) string {
 // resolves relative file: URLs against the JVM working directory) requires an
 // absolute path — a relative reference silently fails to load, leaving no
 // queue manager group defined and producing MQRC_Q_MGR_NAME_ERROR (2058).
-func resolveCcdtUrl(url string) string {
-	const prefix = "file:"
-	if !strings.HasPrefix(url, prefix) {
-		return url // http(s):// or already some other scheme — leave as-is
+// resolveCcdtUrl normalizes a CCDT location into an absolute "file:///..."
+// URL. The Go/C MQ client requires an absolute path for file-based CCDTs —
+// unlike the Java client, which resolves relative "file:" URLs against the
+// JVM's working directory, a relative reference here silently fails to load,
+// leaving no queue manager group defined and producing
+// MQRC_Q_MGR_NAME_ERROR (2058) instead of a clear "file not found" error.
+func resolveCcdtUrl(raw string) string {
+	if raw == "" {
+		return raw
 	}
-	path := strings.TrimPrefix(url, prefix)
-	if strings.HasPrefix(path, "///") {
-		return url // already absolute file:/// form
+
+	// Non-file schemes (HTTP/HTTPS CCDT distribution) pass through untouched.
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
 	}
+
+	// Strip an optional "file:" prefix — a bare path with no scheme at all is
+	// also valid input; the client assumes file: in that case.
+	path := strings.TrimPrefix(raw, "file:")
+
+	// Already a fully-qualified form — file:///path or file://host/path —
+	// leave it alone.
+	if strings.HasPrefix(path, "//") {
+		return raw
+	}
+
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return url // fall back to original; Connx will surface a clear error
+		return raw // fall back; Connx will surface a clear error instead
 	}
-	return prefix + "///" + strings.TrimPrefix(abs, "/")
+	abs = filepath.ToSlash(abs) // normalize \ to / for Windows paths
+
+	if strings.HasPrefix(abs, "/") {
+		return "file://" + abs // Unix absolute path already starts with "/"
+	}
+	return "file:///" + abs // Windows, e.g. "C:/Users/..." → file:///C:/Users/...
 }
 
 // connectOption returns an MQOptions callback that applies the correct
