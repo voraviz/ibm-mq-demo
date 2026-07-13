@@ -304,11 +304,11 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
 
 All applications connect to the Uniform Cluster using the **CCDT** file ([`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)) and the queue manager name `*UNIQA` so the client accepts connections from either `QM1` or `QM2`.
 
-| Application | Language | `BALANCED` | Notes |
+<!-- | Application | Language | `BALANCED` | Notes |
 |---|---|---|---|
 | `all-in-one-app` | Java JMS | `YES` / `NO` | Full cluster rebalancing supported |
 | `api-app-go` | Go MQI C | `NOTAPPLIC` | HA failover works; rebalancing not supported by MQI C |
-| `api-app-go-jms20` | Go MQI C | `NOTAPPLIC` | Same as `api-app-go` — JMS20 wraps MQI C, not Java JMS |
+| `api-app-go-jms20` | Go MQI C | `NOTAPPLIC` | Same as `api-app-go` — JMS20 wraps MQI C, not Java JMS | -->
 
 ### All-in-one Java Application
 
