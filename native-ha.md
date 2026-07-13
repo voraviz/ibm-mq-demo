@@ -14,8 +14,8 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
     - [Native HA Node Configuration](#native-ha-node-configuration)
     - [Start Containers](#start-containers)
     - [Verify the Cluster](#verify-the-cluster)
-    - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
   - [Test Applications](#test-applications)
+    - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
     - [All-in-one Java Application](#all-in-one-java-application)
     - [Golang REST API](#golang-rest-api)
     - [Golang JMS REST API](#golang-jms-rest-api)
@@ -275,14 +275,18 @@ Response from a **replica** node:
 }
 ```
 
+## Test Applications
+
+All test applications support two connection modes — **connection name list** (default) and **CCDT** — and enable automatic client reconnect so that a failover is transparent to the application layer.
+
 ### CCDT (Client Channel Definition Table)
 
-A **Client Channel Definition Table (CCDT)** is a JSON file that describes the MQ channel and connection endpoints the client should use. It is an alternative to specifying `connectionList` and `channel` separately in `application.properties` — the client reads both from the CCDT file instead.
+A **Client Channel Definition Table (CCDT)** is a JSON file that describes the MQ channel and connection endpoints the client should use. It is an alternative to specifying `connectionList` and `channel` separately — the client reads both from the CCDT file instead.
 
 | | Connection List | CCDT |
 |---|---|---|
-| Config location | `application.properties` | JSON file on disk (or URL) |
-| Channel | Set separately (`ibm.mq.channel`) | Embedded in the JSON |
+| Config location | App config / env vars | JSON file on disk (or URL) |
+| Channel | Set separately | Embedded in the JSON |
 | Multi-host | Comma-separated list | Array of `connection` objects |
 | When to use | Simple setups, local dev | Production, shared config, uniform cluster |
 
@@ -336,10 +340,6 @@ Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
 > **Note:** The `queueManager` field in the CCDT matches the queue manager the client connects to. Use `QM1` for Native HA and `UNIQA` (or `*UNIQA`) for a Uniform Cluster — the asterisk prefix tells the client to accept any queue manager whose name starts with `UNIQA`.
 
 ---
-
-## Test Applications
-
-Both applications connect via a **connection name list** covering all three nodes and enable automatic client reconnect so that a failover is transparent to the application layer.
 
 ### All-in-one Java Application
 
@@ -519,12 +519,16 @@ untouched.
 
 [`api-app-go`](api-app-go) is a standalone Go REST API backend. Pair it with the [`ui-app`](ui-app) Vue.js frontend.
 
-**Connection name list** — [`api-app-go/config/config.go`](api-app-go/config/config.go):
+**Configuration** — [`api-app-go/config/config.go`](api-app-go/config/config.go):
 
 ```go
 func Load() *Config {
     return &Config{
+        CcdtUrl:          getenv("IBM_MQ_CCDT_URL", ""),
         ConnectionList:   getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
+        Host:             getenv("IBM_MQ_HOST", "localhost"),
+        Port:             getenvInt("IBM_MQ_PORT", 1414),
+        AppName:          getenv("MQAPPLNAME", "API-APP-GO"),
         Channel:          getenv("IBM_MQ_CHANNEL", "DEV.APP.SVRCONN"),
         QueueManager:     getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
         Username:         getenv("IBM_MQ_USERNAME", "app"),
@@ -536,15 +540,16 @@ func Load() *Config {
 }
 ```
 
+When `IBM_MQ_CCDT_URL` is set, it takes precedence over `IBM_MQ_CONNECTION_LIST` and `IBM_MQ_CHANNEL` — both channel name and connection endpoints are read from the CCDT file.
+
 **Automatic reconnect** — [`api-app-go/mq/connect.go`](api-app-go/mq/connect.go):
 
 ```go
 cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
-    // MQCNO_RECONNECT_Q_MGR: retries every address in ConnectionName to
-    // find the active native HA node. Get/Put calls block transparently
-    // during failover without application-level retry logic.
-    // Use MQCNO_RECONNECT_Q_MGR (not MQCNO_RECONNECT) with a multi-host list.
-    ibmmq.MQCNO_RECONNECT_Q_MGR
+    // MQCNO_RECONNECT: allows reconnect within a Native HA group (failover)
+    // AND across queue managers in a Uniform Cluster (balancing).
+    // MQCNO_RECONNECT_Q_MGR would block cross-QM balancing entirely.
+    ibmmq.MQCNO_RECONNECT
 ```
 
 `cd.HeartbeatInterval` is set to `ReconnectTimeout` (default 30 s), matching the Java `WMQ_CLIENT_RECONNECT_TIMEOUT` behaviour — a stalled reconnect attempt is abandoned after this period.
@@ -583,10 +588,23 @@ go build -o api-app-go .
 ./api-app-go
 ```
 
-The API listens on **http://localhost:8081** by default. Override any setting via environment variable before running:
+The API listens on **http://localhost:8081** by default. Override any setting via environment variable before running.
+
+**Connection list:**
 
 ```bash
 IBM_MQ_CONNECTION_LIST="localhost(1414),localhost(1415),localhost(1416)" \
+IBM_MQ_USERNAME="app" \
+IBM_MQ_PASSWORD="passw0rd" \
+IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
+./api-app-go
+```
+
+**CCDT** — set `IBM_MQ_CCDT_URL` instead; `IBM_MQ_CONNECTION_LIST` and `IBM_MQ_CHANNEL` are ignored when CCDT is used:
+
+```bash
+IBM_MQ_CCDT_URL="file:///$(pwd)/../ccdt/ccdt.nativeha.json" \
+IBM_MQ_QUEUE_MANAGER="QM1" \
 IBM_MQ_USERNAME="app" \
 IBM_MQ_PASSWORD="passw0rd" \
 IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
@@ -680,20 +698,30 @@ cf := mqjms.ConnectionFactoryImpl{
 }
 ```
 
-**Multi-host HA** — `ConnectionFactoryImpl` only exposes a single `Hostname`+`PortNumber`,
-so an `MQOptions` callback is used to inject the full connection list and enable
-`MQCNO_RECONNECT_Q_MGR` at connect time:
+**Multi-host HA / CCDT** — `ConnectionFactoryImpl` only exposes a single `Hostname`+`PortNumber`,
+so an `MQOptions` callback is used to inject the full connection details and enable
+`MQCNO_RECONNECT` at connect time:
 
 ```go
-func multiHostOption(cfg *config.Config) jms20subset.MQOptions {
-    connName := connectionName(cfg) // e.g. "host1(1414),host2(1414),host3(1414)"
+func connectOption(cfg *config.Config) jms20subset.MQOptions {
     return func(cno *ibmmq.MQCNO) {
-        cno.ClientConn.ConnectionName = connName
-        cno.Options |= ibmmq.MQCNO_RECONNECT_Q_MGR
-        cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+        cno.Options |= ibmmq.MQCNO_RECONNECT
+        cno.ApplName = cfg.AppName
+
+        if cfg.CcdtUrl != "" {
+            // CCDT takes precedence — channel and connection list are read
+            // from the CCDT file; no ConnectionName override is needed.
+            cno.CCDTUrl = resolveCcdtUrl(cfg.CcdtUrl)
+        } else {
+            // Override ConnectionName with the full multi-host list.
+            cno.ClientConn.ConnectionName = connectionName(cfg)
+            cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+        }
     }
 }
 ```
+
+`MQCNO_RECONNECT` (not `MQCNO_RECONNECT_Q_MGR`) allows reconnect within a Native HA group **and** across queue managers in a Uniform Cluster. `_Q_MGR` would block cross-QM balancing entirely.
 
 **Consumer poll loop** — [`api-app-go-jms20/mq/consumer.go`](api-app-go-jms20/mq/consumer.go):
 
