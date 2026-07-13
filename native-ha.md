@@ -187,6 +187,22 @@ podman run -d \
   icr.io/ibm-messaging/mq:$TAG
 ```
 
+**Quick teardown and recreate — [`recreate-nativeha.sh`](recreate-nativeha.sh)**
+
+Use this script to wipe all running containers and volumes and start fresh with a clean three-node cluster. It is useful when iterating on configuration or after a test that leaves the cluster in an unknown state.
+
+```bash
+chmod +x recreate-nativeha.sh
+./recreate-nativeha.sh
+```
+
+The script:
+1. Stops and force-removes **all** running containers (`podman stop -a; podman rm -a -f`).
+2. Removes and recreates the three named volumes (`mq-node-{1,2,3}-data`).
+3. Starts all three MQ nodes with the same flags as the manual commands above.
+
+> **Warning:** `podman stop -a` stops **every** container on the host, not only the MQ nodes. Use it only on a dedicated dev machine or Podman VM.
+
 ### Verify the Cluster
 
 **Check all containers are running:**
@@ -412,7 +428,8 @@ public class MQConnectionFactoryProducer {
 
 ```bash
 # Build
-mvn clean package
+cd all-in-one-app
+./mvnw clean package
 
 # Run from JAR
 java -jar target/quarkus-app/quarkus-run.jar
@@ -424,6 +441,24 @@ podman run -p 8080:8080 \
 ```
 
 Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
+
+**OpenAPI & Swagger UI**
+
+The REST API is fully documented with OpenAPI 3. Once the application is running:
+
+| URL | Description |
+|-----|-------------|
+| [http://localhost:8080/q/swagger-ui](http://localhost:8080/q/swagger-ui) | Interactive Swagger UI |
+| [http://localhost:8080/q/openapi](http://localhost:8080/q/openapi) | OpenAPI 3 spec (YAML) |
+| [http://localhost:8080/q/openapi?format=json](http://localhost:8080/q/openapi?format=json) | OpenAPI 3 spec (JSON) |
+
+The spec covers three tag groups:
+
+| Tag | Endpoints |
+|-----|-----------|
+| **MQ Info** | `GET /api/info` — queue manager name, host, port, connection status |
+| **MQ Consumer** | `POST /api/consumer/start`, `POST /api/consumer/stop`, `GET /api/consumer/status`, `GET /api/consumer/count` |
+| **MQ Messages** | `POST /api/messages` (send), `GET /api/messages/count` |
 
 ![Application connected to mq-node-2](images/mq-app.png)
 
