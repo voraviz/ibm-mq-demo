@@ -398,7 +398,7 @@ export IBM_MQ_QUEUE_MANAGER='*UNIQA'
 
 - Use CCDT:
 ```log
-2026/07/12 17:30:01 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt/ccdt.cluster.json user=app
+2026/07/13 13:14:03 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt.cluster.json user=app
 ```
 
 **Check application status:**
@@ -412,10 +412,10 @@ podman exec mq-node-4 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
 AMQ8932I: Display application status details.
    APPLNAME(API-APP-GO)                    CLUSTER(UNIQA)
    COUNT(1)                                MOVCOUNT(0)
-   BALANCED(NOTAPPLIC)                     TYPE(APPL)
+   BALANCED(NO)                     TYPE(APPL)
 ```
 
-> `BALANCED(NOTAPPLIC)` is expected for Go apps — the MQI C client does not participate in IBM MQ's application rebalancing protocol. `CLUSTER(UNIQA)` confirms the connection is cluster-aware. HA failover via `MQCNO_RECONNECT` still works across both groups.
+<!-- > `BALANCED(NOTAPPLIC)` is expected for Go apps — the MQI C client does not participate in IBM MQ's application rebalancing protocol. `CLUSTER(UNIQA)` confirms the connection is cluster-aware. HA failover via `MQCNO_RECONNECT` still works across both groups. -->
 
 ---
 
@@ -436,7 +436,7 @@ export IBM_MQ_QUEUE_MANAGER='*UNIQA'
 
 - Use CCDT:
 ```log
-2026/07/12 17:30:01 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt/ccdt.cluster.json user=app
+2026/07/13 13:14:25 MQ connect: qmgr=*UNIQA ccdt=file:///Users/.../ccdt.cluster.json user=app
 ```
 
 **Check application status:**
@@ -450,10 +450,10 @@ podman exec mq-node-4 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
 AMQ8932I: Display application status details.
    APPLNAME(API-APP-GO-JMS20)              CLUSTER(UNIQA)
    COUNT(1)                                MOVCOUNT(0)
-   BALANCED(NOTAPPLIC)                     TYPE(APPL)
+   BALANCED(NO)                     TYPE(APPL)
 ```
 
-> Same `BALANCED(NOTAPPLIC)` behaviour as `api-app-go` — `mq-golang-jms20` wraps MQI C, not the Java JMS provider, so application rebalancing is not available.
+<!-- > Same `BALANCED(NOTAPPLIC)` behaviour as `api-app-go` — `mq-golang-jms20` wraps MQI C, not the Java JMS provider, so application rebalancing is not available. -->
 
 ---
 
