@@ -13,10 +13,10 @@ DEFINE QLOCAL('DEV.DEMO.QL.DEAD') DEFPSIST(YES) REPLACE
 * ================================================
 * Channel Authentication
 * ================================================
-SET CHLAUTH('*') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(NOACCESS) ACTION(REPLACE)
 SET CHLAUTH('DEV.APP.SVRCONN') TYPE(BLOCKUSER) USERLIST('nobody') ACTION(REPLACE)
-SET CHLAUTH('DEV.APP.SVRCONN') TYPE(USERMAP) CLNTUSER('app') MCAUSER('app') ACTION(REPLACE)
-
+* SET CHLAUTH('DEV.APP.SVRCONN') TYPE(USERMAP) CLNTUSER('app') MCAUSER('app') ACTION(REPLACE)
+SET CHLAUTH('DEV.APP.SVRCONN') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(CHANNEL) ACTION(REPLACE)
+SET CHLAUTH('DEV*') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(CHANNEL) ACTION(ADD)
 * ================================================
 * Connection Authentication
 * ================================================
