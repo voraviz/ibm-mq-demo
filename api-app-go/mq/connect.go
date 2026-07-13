@@ -49,14 +49,31 @@ func resolveCcdtUrl(raw string) string {
 }
 
 // connect opens a client connection to IBM MQ using MQCNO + MQCD + MQCSP.
-// The caller is responsible for calling qmgr.Disc() when done.
+// MQCNO_RECONNECT is set so the connection participates in Native HA failover
+// and Uniform Cluster balancing. The caller must call qmgr.Disc() when done.
 func connect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
+	return dial(cfg, true)
+}
+
+// connectNoReconnect opens a direct, non-reconnecting connection to a single
+// host. Used only inside resolveActiveNode() probe loops: without
+// MQCNO_RECONNECT a standby node immediately returns MQRC_STANDBY_Q_MGR
+// (2539) instead of silently redirecting to the active node and masking the
+// true host identity. The caller must call qmgr.Disc() when done.
+func connectNoReconnect(cfg *config.Config) (ibmmq.MQQueueManager, string, error) {
+	return dial(cfg, false)
+}
+
+// dial is the shared implementation for connect and connectNoReconnect.
+func dial(cfg *config.Config, reconnect bool) (ibmmq.MQQueueManager, string, error) {
 	cno := ibmmq.NewMQCNO()
-	cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
+	cno.Options = ibmmq.MQCNO_CLIENT_BINDING
+	if reconnect {
 		// MQCNO_RECONNECT: allows reconnect within a Native HA group (failover)
 		// AND across queue managers in a Uniform Cluster (balancing).
 		// MQCNO_RECONNECT_Q_MGR would block cross-QM balancing entirely.
-		ibmmq.MQCNO_RECONNECT
+		cno.Options |= ibmmq.MQCNO_RECONNECT
+	}
 
 	connDesc := ""
 	if cfg.CcdtUrl != "" {

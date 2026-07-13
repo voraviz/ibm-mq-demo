@@ -1,6 +1,8 @@
 package mq
 
 import (
+	"encoding/json"
+	"os"
 	"strconv"
 	"strings"
 
@@ -42,32 +44,92 @@ func parseConnEntries(s string) []connEntry {
 	return entries
 }
 
-// resolveActiveNode iterates the parsed entries from cfg.ConnectionList and
-// returns the first one that accepts a full Connx() (i.e. the active HA node).
-// Falls back to cfg.Host/cfg.Port if no individual probe succeeds.
+// parseCcdtEntries reads a file-based CCDT JSON and returns all host/port
+// pairs found across all clientConnection entries.
+// Returns nil for HTTP/HTTPS CCDTs (cannot be read locally).
+func parseCcdtEntries(ccdtUrl string) []connEntry {
+	// Only handle file:// CCDTs — HTTP CCDTs are remote and unreadable here.
+	path := ""
+	switch {
+	case strings.HasPrefix(ccdtUrl, "file:///"):
+		path = ccdtUrl[len("file://"):]
+	case strings.HasPrefix(ccdtUrl, "file://"):
+		// file://host/path form — unsupported, skip
+		return nil
+	case strings.HasPrefix(ccdtUrl, "file:"):
+		path = ccdtUrl[len("file:"):]
+	case strings.HasPrefix(ccdtUrl, "http://"), strings.HasPrefix(ccdtUrl, "https://"):
+		return nil
+	default:
+		path = ccdtUrl
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var ccdt struct {
+		Channel []struct {
+			ClientConnection struct {
+				Connection []struct {
+					Host string `json:"host"`
+					Port int    `json:"port"`
+				} `json:"connection"`
+			} `json:"clientConnection"`
+		} `json:"channel"`
+	}
+	if err := json.Unmarshal(data, &ccdt); err != nil {
+		return nil
+	}
+
+	var entries []connEntry
+	for _, ch := range ccdt.Channel {
+		for _, conn := range ch.ClientConnection.Connection {
+			if conn.Host != "" && conn.Port > 0 {
+				entries = append(entries, connEntry{host: conn.Host, port: conn.Port})
+			}
+		}
+	}
+	return entries
+}
+
+// resolveActiveNode probes each host/port entry and returns the first one that
+// accepts a direct (non-reconnecting) Connx() — i.e. the active HA/cluster node.
+// Without MQCNO_RECONNECT a standby immediately returns MQRC_STANDBY_Q_MGR
+// (2539) instead of silently redirecting the probe to the active node.
+//
+// For CCDT mode the host list is extracted from the CCDT JSON file. If the
+// CCDT is remote (HTTP) or unreadable, returns ("", 0).
 func resolveActiveNode(cfg *config.Config, connName string) (string, int) {
-	entries := parseConnEntries(connName)
+	var entries []connEntry
+	if cfg.CcdtUrl != "" {
+		entries = parseCcdtEntries(cfg.CcdtUrl)
+	} else {
+		entries = parseConnEntries(connName)
+	}
+
 	if len(entries) == 1 {
 		return entries[0].host, entries[0].port
 	}
 	for _, e := range entries {
-		// Build a single-host config for this entry (ConnectionList cleared so
-		// connect() uses the Host/Port fallback path, not the full list again).
+		// Build a single-host config for this entry (ConnectionList/CcdtUrl
+		// cleared so dial() uses the Host/Port fallback path directly).
 		singleCfg := *cfg
 		singleCfg.Host = e.host
 		singleCfg.Port = e.port
 		singleCfg.ConnectionList = ""
+		singleCfg.CcdtUrl = ""
 
-		qmgr, _, err := connect(&singleCfg)
+		qmgr, _, err := connectNoReconnect(&singleCfg)
 		if err != nil {
 			continue
 		}
 		qmgr.Disc()
 		return e.host, e.port
 	}
-	// Defensive fallback — should not be reached since the initial Probe()
-	// connect() already succeeded.
-	return cfg.Host, cfg.Port
+	// Fallback: CCDT unreadable (HTTP) or all probes failed.
+	return "", 0
 }
 
 // Probe opens a transient MQ connection to verify connectivity and resolve the

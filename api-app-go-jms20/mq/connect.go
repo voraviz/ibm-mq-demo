@@ -119,8 +119,25 @@ func resolveCcdtUrl(raw string) string {
 //   - ApplName: identifies this app to MQ for balancing grouping and
 //     DISPLAY APSTATUS('<name>') lookups; previously unset.
 func connectOption(cfg *config.Config) jms20subset.MQOptions {
+	return mqOptions(cfg, true)
+}
+
+// connectOptionNoReconnect returns an MQOptions callback identical to
+// connectOption but without MQCNO_RECONNECT. Used only inside the
+// resolveActiveNode() probe loop: without the reconnect flag a standby node
+// immediately returns MQRC_STANDBY_Q_MGR (2539) instead of silently
+// redirecting to the active node and masking the true host identity.
+func connectOptionNoReconnect(cfg *config.Config) jms20subset.MQOptions {
+	return mqOptions(cfg, false)
+}
+
+// mqOptions is the shared implementation for connectOption and
+// connectOptionNoReconnect.
+func mqOptions(cfg *config.Config, reconnect bool) jms20subset.MQOptions {
 	return func(cno *ibmmq.MQCNO) {
-		cno.Options |= ibmmq.MQCNO_RECONNECT
+		if reconnect {
+			cno.Options |= ibmmq.MQCNO_RECONNECT
+		}
 		cno.ApplName = cfg.AppName
 
 		if cfg.CcdtUrl != "" {
