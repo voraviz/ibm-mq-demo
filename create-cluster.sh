@@ -51,15 +51,17 @@ sleep 10
 clear
 echo "Wait for QM1 Native HA setting..."
 sleep 60
-podman exec mq-node-1 dspmq -o nativeha -x
+QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+echo "QM1 Active on: $QM1_ACTIVE_NODE"
 clear
 echo "Wait for QM2 Native HA setting..."
 sleep 60
-podman exec mq-node-4 dspmq -o nativeha -x
+QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+echo "QM2 Active on: $QM1_ACTIVE_NODE"
 sleep 10
 clear
 echo "Wait for cluster setup..."
 sleep 60
 podman exec mq-node-1 bash -c "echo 'display clusqmgr(*)' | runmqsc QM1"
-sleep 10
+sleep 60
 podman exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
