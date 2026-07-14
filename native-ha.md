@@ -122,6 +122,34 @@ The MQSC configuration ([`mq-native-ha/config/config.auth.mqsc`](mq-native-ha/co
 
 ### Start Containers
 
+Use [`create-nativeha.sh`](create-nativeha.sh) to start (or recreate) the three-node cluster in one step:
+
+```bash
+chmod +x create-nativeha.sh
+./create-nativeha.sh
+```
+
+The script:
+1. Stops and force-removes **all** running containers (`podman stop -a; podman rm -a -f`).
+2. Removes and recreates the three named volumes (`mq-node-{1,2,3}-data`).
+3. Starts all three MQ nodes in a loop, incrementing ports for each node:
+
+| Node | MQ port | Web Console | Prometheus |
+|------|---------|-------------|------------|
+| mq-node-1 | 1414 | 9443 | 9517 |
+| mq-node-2 | 1415 | 9444 | 9518 |
+| mq-node-3 | 1416 | 9445 | 9519 |
+
+4. Waits 60 seconds for the initial leader election, then prints the active node:
+
+```
+QM1 Active on: mq-node-2
+```
+
+> **Warning:** `podman stop -a` stops **every** container on the host, not only the MQ nodes. Use it only on a dedicated dev machine or Podman VM.
+
+**Manual commands (reference):**
+
 ```bash
 TAG=10.0.0.0-r1-amd64
 CONFIG=config.auth.mqsc
@@ -135,7 +163,7 @@ podman run -d \
   --hostname mq-node-1 \
   -p 1414:1414 \
   -p 9443:9443 \
-  -p 9157:9157 \
+  -p 9517:9517 \
   -v mq-node-1-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node1.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
@@ -155,7 +183,7 @@ podman run -d \
   --hostname mq-node-2 \
   -p 1415:1414 \
   -p 9444:9443 \
-  -p 9158:9157 \
+  -p 9518:9517 \
   -v mq-node-2-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node2.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
@@ -175,7 +203,7 @@ podman run -d \
   --hostname mq-node-3 \
   -p 1416:1414 \
   -p 9445:9443 \
-  -p 9159:9157 \
+  -p 9519:9517 \
   -v mq-node-3-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node3.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
@@ -186,22 +214,6 @@ podman run -d \
   -e MQ_ENABLE_METRICS=true \
   icr.io/ibm-messaging/mq:$TAG
 ```
-
-**Quick teardown and recreate — [`recreate-nativeha.sh`](recreate-nativeha.sh)**
-
-Use this script to wipe all running containers and volumes and start fresh with a clean three-node cluster. It is useful when iterating on configuration or after a test that leaves the cluster in an unknown state.
-
-```bash
-chmod +x recreate-nativeha.sh
-./recreate-nativeha.sh
-```
-
-The script:
-1. Stops and force-removes **all** running containers (`podman stop -a; podman rm -a -f`).
-2. Removes and recreates the three named volumes (`mq-node-{1,2,3}-data`).
-3. Starts all three MQ nodes with the same flags as the manual commands above.
-
-> **Warning:** `podman stop -a` stops **every** container on the host, not only the MQ nodes. Use it only on a dedicated dev machine or Podman VM.
 
 ### Verify the Cluster
 
@@ -215,9 +227,9 @@ Expected output:
 
 ```
 NAMES       PORTS                                                                               STATUS
-mq-node-1   0.0.0.0:1414->1414/tcp, 0.0.0.0:9157->9157/tcp, 0.0.0.0:9443->9443/tcp, 9415/tcp  Up 14 seconds
-mq-node-2   0.0.0.0:1415->1414/tcp, 0.0.0.0:9158->9157/tcp, 0.0.0.0:9444->9443/tcp, 9415/tcp  Up 12 seconds
-mq-node-3   0.0.0.0:1416->1414/tcp, 0.0.0.0:9159->9157/tcp, 0.0.0.0:9445->9443/tcp, 9415/tcp  Up 10 seconds
+mq-node-1   0.0.0.0:1414->1414/tcp, 0.0.0.0:9443->9443/tcp, 0.0.0.0:9517->9517/tcp            Up 14 seconds
+mq-node-2   0.0.0.0:1415->1414/tcp, 0.0.0.0:9444->9443/tcp, 0.0.0.0:9518->9517/tcp            Up 12 seconds
+mq-node-3   0.0.0.0:1416->1414/tcp, 0.0.0.0:9445->9443/tcp, 0.0.0.0:9519->9517/tcp            Up 10 seconds
 ```
 
 **Check Native HA status** — wait ~30 seconds for the initial leader election to complete:
