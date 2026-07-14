@@ -567,3 +567,13 @@ All valid MQSC commands were processed.
 ```
 
 > `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
+
+**3. Cleanup**
+
+Run [clear-go-lang-apps.sh](clear-go-lang-apps.sh) to stop all running `api-app-go` processes and remove the log files:
+- Kill all `api-app-go` processes
+- Remove all `logs/*.log` files
+
+```bash
+./clear-go-lang-apps.sh
+```
