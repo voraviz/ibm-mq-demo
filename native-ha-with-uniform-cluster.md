@@ -22,6 +22,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Failover Test](#failover-test)
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
+    - [Scenario 3 — Application Load Balancing (WIP - still need some improvement)](#scenario-3--application-load-balancing-wip---still-need-some-improvement)
 
 ---
 
@@ -516,3 +517,53 @@ podman start mq-node-1 mq-node-2 mq-node-3
 ```
 
 Once `QM1` is back, the cluster rebalances connections across both groups again. `BALANCED` returns to `NO` briefly during rebalancing, then settles to `YES`.
+
+### Scenario 3 — Application Load Balancing (WIP - still need some improvement)
+
+This walkthrough demonstrates how a Uniform Cluster distributes application workload across queue managers.
+
+**1. Start Golang Apps**
+
+Run [start-go-lang-apps.sh](start-go-lang-apps.sh)
+- Start 10 `api-app-go` instances from port 8100 to 8109 in background mode
+- Send 10 messages to each instance and start the listener
+- Write logs to the `logs/` directory
+
+**2. Check App Status**
+
+Run the following commands to check each queue manager's application status:
+
+```bash
+QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+podman exec $QM1_ACTIVE_NODE bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
+QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+podman exec $QM2_ACTIVE_NODE bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
+```
+
+**QM1 output:**
+
+```
+     1 : DISPLAY APSTATUS(*)
+AMQ8932I: Display application status details.
+   APPLNAME(APP-X)                         CLUSTER(UNIQA)
+   COUNT(13)                               MOVCOUNT(13)
+   BALANCED(NO)                            TYPE(APPL)
+One MQSC command read.
+No commands have a syntax error.
+All valid MQSC commands were processed.
+```
+
+**QM2 output:**
+
+```
+     1 : DISPLAY APSTATUS(*)
+AMQ8932I: Display application status details.
+   APPLNAME(APP-X)                         CLUSTER(UNIQA)
+   COUNT(10)                               MOVCOUNT(10)
+   BALANCED(NO)                            TYPE(APPL)
+One MQSC command read.
+No commands have a syntax error.
+All valid MQSC commands were processed.
+```
+
+> `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
