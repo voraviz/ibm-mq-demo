@@ -442,9 +442,12 @@ podman run -p 8080:8080 \
 
 Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
 
+![Application connected to mq-node-2](images/mq-app.png)
+
 **OpenAPI & Swagger UI**
 
 The REST API is fully documented with OpenAPI 3. Once the application is running:
+You can access swagger-ui at /q/swagger-ui
 
 | URL | Description |
 |-----|-------------|
@@ -460,7 +463,9 @@ The spec covers three tag groups:
 | **MQ Consumer** | `POST /api/consumer/start`, `POST /api/consumer/stop`, `GET /api/consumer/status`, `GET /api/consumer/count` |
 | **MQ Messages** | `POST /api/messages` (send), `GET /api/messages/count` |
 
-![Application connected to mq-node-2](images/mq-app.png)
+Swagger-UI
+
+![swagger UI](images/swagger-ui.png)
 
 **Check APP status**
 - Run runmqsc at active node
@@ -475,6 +480,7 @@ AMQ8932I: Display application status details.
    COUNT(1)                                MOVCOUNT(0)
    BALANCED(NOTAPPLIC)
 ```
+
 **Application Log**
 - Use Connection List
 ```log
