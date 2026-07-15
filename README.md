@@ -6,7 +6,7 @@ This repository demonstrates IBM MQ capabilities across three areas:
 |---|---|---|
 | **Native HA** | [native-ha.md](native-ha.md) | ✅ Available |
 | **Native HA + Uniform Cluster** | [native-ha-with-uniform-cluster.md](native-ha-with-uniform-cluster.md) | ✅ Available |
-| **Observability** | [Metrics-and-OTEL.md](Metrics-and-OTEL.md) | 🚧 Work in progress |
+| **Observability** | [Metrics-and-OTEL.md](metrics-and-otel.md) | 🚧 Work in progress (You can try)|
 
 ---
 
