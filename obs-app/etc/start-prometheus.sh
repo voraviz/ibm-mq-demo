@@ -6,8 +6,9 @@
 set -e
 
 echo "Starting Prometheus..."
-podman run --name obs-prometheus \
+podman run --name prometheus \
   -v "./prometheus.yaml:/etc/prometheus/prometheus.yaml:Z" \
+  --network mq-ha-net \
   -p 9090:9090 \
   -e TZ=Asia/Bangkok \
   -d prom/prometheus:latest \

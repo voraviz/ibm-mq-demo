@@ -21,7 +21,7 @@ scrape_configs:
   # IBM MQ built-in Prometheus exporter - mq-node-2
   - job_name: 'ibm-mq-node-2'
     static_configs:
-      - targets: ['host.containers.internal:9158']
+      - targets: ['host.containers.internal:9157']
     metrics_path: /metrics
     scheme: http
     # tls_config:
@@ -30,7 +30,7 @@ scrape_configs:
   # IBM MQ built-in Prometheus exporter - mq-node-3
   - job_name: 'ibm-mq-node-3'
     static_configs:
-      - targets: ['host.containers.internal:9159']
+      - targets: ['host.containers.internal:9157']
     metrics_path: /metrics
     scheme: http
     # tls_config:
