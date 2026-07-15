@@ -7,7 +7,7 @@ done
 TAG=10.0.0.0-r1-amd64
 CONFIG=config.auth.mqsc
 MQ_PORT=1414
-MQ_PROMETHEUS_PORT=9517
+MQ_PROMETHEUS_PORT=9157
 MQ_CONSOLE_PORT=9443
 for i in 1 2 3;
 do
@@ -20,7 +20,7 @@ do
     --hostname mq-node-$i \
     -p $MQ_PORT:1414 \
     -p $MQ_CONSOLE_PORT:9443 \
-    -p $MQ_PROMETHEUS_PORT:9517 \
+    -p $MQ_PROMETHEUS_PORT:9157 \
     -v mq-node-$i-data:/var/mqm \
     -v ./mq-native-ha/config/qm-node$i.ini:/etc/mqm/native-ha.ini:ro \
     -v ./mq-native-ha/config/$CONFIG:/etc/mqm/config.mqsc:ro \
