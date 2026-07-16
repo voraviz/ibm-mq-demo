@@ -22,7 +22,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Failover Test](#failover-test)
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
-    - [Scenario 3 — Application Load Balancing (WIP - still need some improvement)](#scenario-3--application-load-balancing-wip---still-need-some-improvement)
+    - [Scenario 3 — Application Load Balancing](#scenario-3--application-load-balancing)
 
 ---
 
@@ -518,29 +518,72 @@ podman start mq-node-1 mq-node-2 mq-node-3
 
 Once `QM1` is back, the cluster rebalances connections across both groups again. `BALANCED` returns to `NO` briefly during rebalancing, then settles to `YES`.
 
-### Scenario 3 — Application Load Balancing (WIP - still need some improvement)
+### Scenario 3 — Application Load Balancing
 
 This walkthrough demonstrates how a Uniform Cluster distributes application workload across queue managers.
 
-**1. Start Golang Apps**
+**1. Start Script for check balancing status**
+- Open terminal and run bash script [check-app-balancing-status.sh](check-app-balancing-status.sh)
 
-Run [start-go-lang-apps.sh](start-go-lang-apps.sh)
+**2. Start Golang Apps**
+
+Run [start-go-lang-apps.sh](start-go-lang-apps.sh) on another terminal
+
 - Start 10 `api-app-go` instances from port 8100 to 8109 in background mode
 - Send 10 messages to each instance and start the listener
 - Write logs to the `logs/` directory
 
-**2. Check App Status**
+**3. Check App Staus**
 
+`BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. 
+
+![](images/apps-still-not-balanced.png)
+
+It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
+
+![](images/apps-already-balanced.png)
+
+
+
+<!-- 
 Run the following commands to check each queue manager's application status:
 
 ```bash
-QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-podman exec $QM1_ACTIVE_NODE bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
-QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-podman exec $QM2_ACTIVE_NODE bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM2"
+podman exec $QM1_ACTIVE_NODE bash -c 'echo "DISPLAY APSTATUS('"'"'keshi'"'"') TYPE (APPL)" | runmqsc QM1'
 ```
 
-**QM1 output:**
+Output show that app name *keshi* status is *balanced* and number of application instances is 10
+
+```bash
+     1 : display apstatus('keshi') type (appl)
+AMQ8932I: Display application status details.
+   APPLNAME(keshi)                         CLUSTER(UNIQA)
+   COUNT(10)                               MOVCOUNT(10)
+   BALANCED(YES)                           TYPE(APPL)
+```
+
+`BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
+
+**3. Check App Connections**
+
+Run the following commands to check number of connections on each Queue Manager:
+
+```bash
+QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+QM1_CONN=$(podman exec $QM1_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM1' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
+QM2_CONN=$(podman exec $QM2_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM2' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
+echo "QM1 Active on: $QM1_ACTIVE_NODE with $QM1_CONN connections"
+echo "QM2 Active on: $QM2_ACTIVE_NODE with $QM2_CONN connections"
+```
+
+Output show that connection distributed on both QM1 and QM2
+
+```bash
+QM1 Active on: mq-node-1 with 5 connections
+QM2 Active on: mq-node-4 with 5 connections
+``` -->
+<!-- **QM1 output:**
 
 ```
      1 : DISPLAY APSTATUS(*)
@@ -566,7 +609,7 @@ No commands have a syntax error.
 All valid MQSC commands were processed.
 ```
 
-> `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
+> `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers. -->
 
 **3. Cleanup**
 
@@ -576,4 +619,17 @@ Run [clear-go-lang-apps.sh](clear-go-lang-apps.sh) to stop all running `api-app-
 
 ```bash
 ./clear-go-lang-apps.sh
+```
+Output
+```bash
+Kill pid: 11003
+Kill pid: 11043
+Kill pid: 11082
+Kill pid: 11121
+Kill pid: 11163
+Kill pid: 11207
+Kill pid: 11254
+Kill pid: 11293
+Kill pid: 11334
+Kill pid: 11373
 ```

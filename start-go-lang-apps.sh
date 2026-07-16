@@ -1,10 +1,11 @@
 #!/bin/bash
 mkdir -p logs
 export SERVER_PORT=8100
-MAX_PORT=$(expr $SERVER_PORT + 9 )
-export MQAPPLNAME="APP-X"
+MAX_PORT=$(expr $SERVER_PORT + 10 )
+export MQAPPLNAME="keshi"
 export IBM_MQ_QUEUE_MANAGER='*UNIQA'
 export IBM_MQ_CCDT_URL='file:./ccdt/ccdt.cluster.json'
+
 while [ $SERVER_PORT -lt $MAX_PORT ]
 do
     echo "Start api-app-go on port $SERVER_PORT"
@@ -20,7 +21,7 @@ do
     done
     echo "Start Listener..."
     curl -X POST http://localhost:$SERVER_PORT/api/consumer/start
-    echo "Get Connection..."
-    curl http://localhost:$SERVER_PORT/api/info|jq
+    # echo "Get Connection..."
+    # curl http://localhost:$SERVER_PORT/api/info|jq
     SERVER_PORT=$(expr $SERVER_PORT + 1 )
 done
