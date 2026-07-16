@@ -82,6 +82,18 @@
       <version>${ibm.mq.version}</version>
     </dependency>
 
+    <!-- OpenTelemetry -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry</artifactId>
+    </dependency>
+
+    <!-- Micrometer OTLP registry -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-micrometer-opentelemetry</artifactId>
+    </dependency>
+
     <!-- CDI -->
     <dependency>
       <groupId>io.quarkus</groupId>
