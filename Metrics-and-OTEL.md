@@ -3,7 +3,7 @@
 
 ```
   ┌────────────────────────┐
-  │  Grafana               │ 
+  │  Grafana               │
   │  (container) :3000     │
   └────────────────────────┘
                │
@@ -23,7 +23,7 @@
                │  (via host.containers.internal — exits mq-ha-net to host)
                ▼
   ┌────────────────────────┐    OTLP gRPC       ┌────────────────────────┐
-  │  Quarkus obs-app       │ ────:4317────────► │  Jaeger                │
+  │  Quarkus all-in-one    │ ────:4317────────► │  Jaeger                │
   │  (host) :8080          │                    │  (container) :16686 UI │
   └────────────────────────┘                    └────────────────────────┘
 
@@ -104,9 +104,8 @@ Prometheus started:
   ![](images/promql-get-tps.png)
 
 ### Grafana
-- Start Grafana container with [start-grafana.sh](obs-app/etc/start-grafana.sh)
+- Start Prometheus container with [start-prometheus.sh](obs-app/etc/start-grafana.sh)
 ```bash
-cd obs-app/etc
 ./start-grafana.sh
 ```
 Output
@@ -118,34 +117,91 @@ Grafana started:
 To import the Quarkus dashboard:
   1. Open http://localhost:3000
   2. Dashboards → Import
-  3. Upload obs-app/etc/14370_rev6.json
-  4. Set data source to Prometheus → Import
+  3. Set data source to Prometheus → Import
 ```
 - Add Prometheus datasource
   - Open [Grafana Dashboard](http://localhost:3000/)
   - Grafana already configured with default data source to http://host.containers.internal:9090
   - Click Sign-In and sign-in with user admin password admin
+## OpenTelemetry
+
+### all-in-one-app with OTEL enabled at runtime
+
+#### Maven dependencies
+
+Two extensions are required in [`all-in-one-app/pom.xml`](all-in-one-app/pom.xml):
+
+```xml
+<!-- OpenTelemetry tracing (OTLP exporter included) -->
+<dependency>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-opentelemetry</artifactId>
+</dependency>
+
+<!-- Micrometer → OTLP bridge (optional: keeps Prometheus metrics separate) -->
+<dependency>
+  <groupId>io.quarkus</groupId>
+  <artifactId>quarkus-micrometer-opentelemetry</artifactId>
+</dependency>
+```
+
+#### application.properties
+
+Configuration in [`all-in-one-app/src/main/resources/application.properties`](all-in-one-app/src/main/resources/application.properties):
+
+```properties
+# ── OpenTelemetry ────────────────────────────────────────────────────────────
+# Enable the OTEL extension
+quarkus.otel.enabled=true
+
+# OTEL metrics export disabled — Prometheus/Micrometer is used for metrics instead
+quarkus.otel.metrics.enabled=false
+
+# SDK active at runtime (set to true to disable tracing without rebuilding)
+quarkus.otel.sdk.disabled=false
+
+# Service name displayed in Jaeger
+quarkus.application.name=all-in-one
+
+# OTLP gRPC collector endpoint (Jaeger accepts OTLP directly on :4317)
+quarkus.otel.exporter.otlp.endpoint=http://localhost:4317
+
+# Optional: add an auth header if the collector requires it
+#quarkus.otel.exporter.otlp.headers=authorization=Bearer my_secret
+
+# Optional: enrich log lines with trace context fields
+#quarkus.log.console.format=%d{HH:mm:ss} %-5p traceId=%X{traceId}, parentId=%X{parentId}, spanId=%X{spanId}, sampled=%X{sampled} [%c{2.}] (%t) %s%e%n
+```
+
+> **Runtime toggle:** To disable tracing on a running instance without a rebuild, pass
+> `-Dquarkus.otel.sdk.disabled=true` on the JVM command line or set the environment variable
+> `QUARKUS_OTEL_SDK_DISABLED=true`. Set it back to `false` to re-enable.
+
 ### Jaeger
 
+Start Jaeger using [`obs-app/etc/start-jaeger.sh`](obs-app/etc/start-jaeger.sh):
 
-
-<!-- - Enable metrics and OTEL in ui-app and api-app
-- Keep original ui-app and api-app. Do not modify both apps
-- Use ui-app and api-app as reference
-- api-app already has quarkus-micrometer-registry-prometheus
-- Local MQ container start with metrics enabled 
 ```bash
-podman run --secret mqAdminPassword --secret mqAppPassword \
-  --env LICENSE=accept \
-  --env MQ_QMGR_NAME=QM1 \
-  --env MQ_ENABLE_METRICS=true \
-  --publish 1414:1414 \
-  --publish 9443:9443 \
-  --publish 9157:9157 \
-  --name QM1 \
-  --detach \
-  icr.io/ibm-messaging/mq
+cd obs-app/etc
+./start-jaeger.sh
 ```
-- Script to start jaeger and otel collector containers is [etc/start-jaeger-otel.sh](etc/start-jaeger-otel.sh)
-- Example of Quarkus Grafana dashboard [etc/14370_rev6.json](etc/14370_rev6.json) -->
+
+Output:
+```
+Observability stack started:
+  Jaeger UI      → http://localhost:16686
+```
+
+Jaeger listens on:
+
+| Port  | Protocol  | Purpose                        |
+|-------|-----------|--------------------------------|
+| 16686 | HTTP      | Jaeger UI                      |
+| 4317  | gRPC      | OTLP trace ingestion           |
+| 14268 | HTTP      | Jaeger native span ingestion   |
+| 14250 | gRPC      | Jaeger native model ingestion  |
+
+Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **all-in-one**, and click **Find Traces** to view distributed traces.
+
+![](images/jaeger-traces.png)
 
