@@ -523,17 +523,26 @@ Once `QM1` is back, the cluster rebalances connections across both groups again.
 This walkthrough demonstrates how a Uniform Cluster distributes application workload across queue managers.
 
 **1. Start Script for check balancing status**
-- Open terminal and run bash script [check-app-balancing-status.sh](check-app-balancing-status.sh)
+
+Open a terminal and run from the repository root:
+
+```bash
+./check-app-balancing-status.sh
+```
 
 **2. Start Golang Apps**
 
-Run [start-go-lang-apps.sh](start-go-lang-apps.sh) on another terminal
+Open another terminal and run from the repository root:
+
+```bash
+./start-go-lang-apps.sh
+```
 
 - Start 10 `api-app-go` instances from port 8100 to 8109 in background mode
 - Send 10 messages to each instance and start the listener
 - Write logs to the `logs/` directory
 
-**3. Check App Staus**
+**3. Check App Status**
 
 `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. 
 
@@ -544,74 +553,7 @@ It transitions to `YES` once all 10 application instances have settled evenly ac
 ![](images/apps-already-balanced.png)
 
 
-
-<!-- 
-Run the following commands to check each queue manager's application status:
-
-```bash
-podman exec $QM1_ACTIVE_NODE bash -c 'echo "DISPLAY APSTATUS('"'"'keshi'"'"') TYPE (APPL)" | runmqsc QM1'
-```
-
-Output show that app name *keshi* status is *balanced* and number of application instances is 10
-
-```bash
-     1 : display apstatus('keshi') type (appl)
-AMQ8932I: Display application status details.
-   APPLNAME(keshi)                         CLUSTER(UNIQA)
-   COUNT(10)                               MOVCOUNT(10)
-   BALANCED(YES)                           TYPE(APPL)
-```
-
-`BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers.
-
-**3. Check App Connections**
-
-Run the following commands to check number of connections on each Queue Manager:
-
-```bash
-QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-QM1_CONN=$(podman exec $QM1_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM1' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
-QM2_CONN=$(podman exec $QM2_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM2' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
-echo "QM1 Active on: $QM1_ACTIVE_NODE with $QM1_CONN connections"
-echo "QM2 Active on: $QM2_ACTIVE_NODE with $QM2_CONN connections"
-```
-
-Output show that connection distributed on both QM1 and QM2
-
-```bash
-QM1 Active on: mq-node-1 with 5 connections
-QM2 Active on: mq-node-4 with 5 connections
-``` -->
-<!-- **QM1 output:**
-
-```
-     1 : DISPLAY APSTATUS(*)
-AMQ8932I: Display application status details.
-   APPLNAME(APP-X)                         CLUSTER(UNIQA)
-   COUNT(13)                               MOVCOUNT(13)
-   BALANCED(NO)                            TYPE(APPL)
-One MQSC command read.
-No commands have a syntax error.
-All valid MQSC commands were processed.
-```
-
-**QM2 output:**
-
-```
-     1 : DISPLAY APSTATUS(*)
-AMQ8932I: Display application status details.
-   APPLNAME(APP-X)                         CLUSTER(UNIQA)
-   COUNT(10)                               MOVCOUNT(10)
-   BALANCED(NO)                            TYPE(APPL)
-One MQSC command read.
-No commands have a syntax error.
-All valid MQSC commands were processed.
-```
-
-> `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. It transitions to `YES` once all 10 application instances have settled evenly across both queue managers. -->
-
-**3. Cleanup**
+**4. Cleanup**
 
 Run [clear-go-lang-apps.sh](clear-go-lang-apps.sh) to stop all running `api-app-go` processes and remove the log files:
 - Kill all `api-app-go` processes
@@ -633,3 +575,29 @@ Kill pid: 11293
 Kill pid: 11334
 Kill pid: 11373
 ```
+
+**5. [Optional] Bash Scripts**
+- MQSC command check Application Status
+  
+  ```bash
+  DISPLAY APSTATUS('keshi') TYPE (APPL)
+  ```
+
+  Run with podman exec
+
+  ```bash
+  podman exec $QM1_ACTIVE_NODE bash -c 'echo "DISPLAY APSTATUS('"'"'keshi'"'"') TYPE (APPL)" | runmqsc QM1'
+  ```
+
+- MQSC command to check connections
+
+  ```bash
+  DISPLAY conn(*) where(appltag eq 'keshi') conntag
+  ```
+
+  Run with bash shell to count number of connections
+
+  ```bash
+  QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+  QM1_CONN=$(podman exec $QM1_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM1' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
+  ```
