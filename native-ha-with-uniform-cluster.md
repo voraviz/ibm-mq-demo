@@ -22,7 +22,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Failover Test](#failover-test)
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
-    - [Scenario 3 — Application Load Balancing](#scenario-3--application-load-balancing)
+  - [Application Load Balancing](#application-load-balancing)
 
 ---
 
@@ -518,7 +518,7 @@ podman start mq-node-1 mq-node-2 mq-node-3
 
 Once `QM1` is back, the cluster rebalances connections across both groups again. `BALANCED` returns to `NO` briefly during rebalancing, then settles to `YES`.
 
-### Scenario 3 — Application Load Balancing
+## Application Load Balancing
 
 This walkthrough demonstrates how a Uniform Cluster distributes application workload across queue managers.
 
