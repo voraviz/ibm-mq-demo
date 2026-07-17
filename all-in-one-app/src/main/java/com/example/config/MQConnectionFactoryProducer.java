@@ -39,15 +39,16 @@ public class MQConnectionFactoryProducer {
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
         factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
-        LOG.debug("MQ factory configured — queueManager: " + config.queueManager()
-                + ", applicationName: " + config.applicationName()
-                + ", reconnectOptions: WMQ_CLIENT_RECONNECT, reconnectTimeout: 30s");
         // Automatically reconnect to the queue manager when it becomes available again.
         // WMQ_CLIENT_RECONNECT retries indefinitely until the QM is reachable.
         // WMQ_CLIENT_RECONNECT_TIMEOUT (seconds) caps how long a single reconnect
         // attempt waits before the client gives up and throws to the application.
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, 30); // 30 sec
+        LOG.debug("MQ factory configured — queueManager: " + config.queueManager()
+                + ", applicationName: " + config.applicationName()
+                + ", reconnectOptions: WMQ_CLIENT_RECONNECT, reconnectTimeout: 30s");
+        
         return factory;
     }
 }
