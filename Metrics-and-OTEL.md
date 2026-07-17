@@ -147,7 +147,7 @@ Prometheus started:
     Stop mq-node-3 and continuously put messages
   
   ![](images/promql-backlog.png)
-### Grafana
+<!-- ### Grafana
 - Start Prometheus container with [start-prometheus.sh](obs-app/etc/start-grafana.sh)
 ```bash
 ./start-grafana.sh
@@ -166,7 +166,7 @@ To import the Quarkus dashboard:
 - Add Prometheus datasource
   - Open [Grafana Dashboard](http://localhost:3000/)
   - Grafana already configured with default data source to http://host.containers.internal:9090
-  - Click Sign-In and sign-in with user admin password admin
+  - Click Sign-In and sign-in with user admin password admin -->
 ## OpenTelemetry
 
 ### all-in-one-app with OTEL enabled at runtime
@@ -220,6 +220,9 @@ quarkus.otel.exporter.otlp.endpoint=http://localhost:4317
 > **Runtime toggle:** To disable tracing on a running instance without a rebuild, pass
 > `-Dquarkus.otel.sdk.disabled=true` on the JVM command line or set the environment variable
 > `QUARKUS_OTEL_SDK_DISABLED=true`. Set it back to `false` to re-enable.
+>
+
+Prebuild container is available at *quay.io/voravitl/simple-mq-app:otel*
 
 ### Jaeger
 
@@ -245,6 +248,23 @@ Jaeger listens on:
 | 14268 | HTTP      | Jaeger native span ingestion   |
 | 14250 | gRPC      | Jaeger native model ingestion  |
 
+<!-- Run all-in-one with otel enabled app
+
+```bash
+podman run -p 8080:8080 \
+--network mq-ha-net \
+-e IBM_MQ_CONNECTION_LIST="mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)" \
+-e QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317" \
+quay.io/voravitl/simple-mq-app:otel
+``` -->
+
 Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **all-in-one**, and click **Find Traces** to view distributed traces.
 
-![](images/jaeger-traces.png)
+Jaeger - all-in-one app
+
+![](images/jaeger-main.png)
+
+
+Example of PUT message trace
+
+![](images/jaeger-trace.png)
