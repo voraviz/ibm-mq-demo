@@ -6,12 +6,12 @@ then
   pwd
 fi
 cd all-in-one-app
-QUARKUS_HTTP_PORT=9090
+QUARKUS_HTTP_PORT=9190
 MAX_PORT=$(expr $QUARKUS_HTTP_PORT + 10 )
 
 while [ $QUARKUS_HTTP_PORT -lt $MAX_PORT ]
 do
-    echo "\nStart all-in-one-app with port $QUARKUS_HTTP_PORT"
+    echo "Start all-in-one-app with port $QUARKUS_HTTP_PORT"
     rm -f ../logs/$QUARKUS_HTTP_PORT.log
     java -Dquarkus.http.port=$QUARKUS_HTTP_PORT \
     -Dibm.mq.ccdt-url="file:../ccdt/ccdt.cluster.json" \
