@@ -40,23 +40,23 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
           │  Uniform Cluster UNIQA                                    │
           │  (workload balanced across both HA groups)                │
           │                                                           │
-          │  ┌──────────── HA-GROUP-1 (QM1) ─────────────┐            │
-          │  │                                           │            │
-          │  │  mq-node-1     mq-node-2     mq-node-3    │            │
-          │  │  port: 1414    port: 1415    port: 1416   │            │
-          │  │  (ACTIVE)      (Replica)     (Replica)    │            │
-          │  │                                           │            │
-          │  │  Raft replication ──────────────────────► │            │
-          │  └───────────────────────────────────────────┘            │
+          │      ┌──────────── HA-GROUP-1 (QM1) ─────────────┐        │
+          │      │                                           │        │
+          │      │  mq-node-1     mq-node-2     mq-node-3    │        │
+          │      │  port: 1414    port: 1415    port: 1416   │        │
+          │      │  (ACTIVE)      (Replica)     (Replica)    │        │
+          │      │                                           │        │
+          │      │  Raft replication ──────────────────────► │        │
+          │      └───────────────────────────────────────────┘        │
           │                                                           │
-          │  ┌──────────── HA-GROUP-2 (QM2) ─────────────┐            │
-          │  │                                           │            │
-          │  │  mq-node-4     mq-node-5     mq-node-6    │            │
-          │  │  port: 1417    port: 1418    port: 1419   │            │
-          │  │  (ACTIVE)      (Replica)     (Replica)    │            │
-          │  │                                           │            │
-          │  │  Raft replication ──────────────────────► │            │
-          │  └───────────────────────────────────────────┘            │
+          │      ┌──────────── HA-GROUP-2 (QM2) ─────────────┐        │
+          │      │                                           │        │
+          │      │  mq-node-4     mq-node-5     mq-node-6    │        │
+          │      │  port: 1417    port: 1418    port: 1419   │        │
+          │      │  (ACTIVE)      (Replica)     (Replica)    │        │
+          │      │                                           │        │
+          │      │  Raft replication ──────────────────────► │        │
+          │      └───────────────────────────────────────────┘        │
           └───────────────────────────────────────────────────────────┘
 ```
 
