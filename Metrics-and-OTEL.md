@@ -13,11 +13,11 @@
   │                                                                                         │
   │   ┌─────────────────┐   scrape :9157      ┌──────────────────────────────────────────┐  │
   │   │                 │ ──────────────────► │  mq-node-1  :9157  (Active QM1) ✅ up    │  │
-  │   │   Prometheus    │ - - - - - - - - - ►  │  mq-node-2  :9157  (Replica)    ❌ down  │  │
-  │   │   :9090         │ - - - - - - - - - ►  │  mq-node-3  :9157  (Replica)    ❌ down  │  │
+  │   │   Prometheus    │ - - - - - - - - - ► │  mq-node-2  :9157  (Replica)    ❌ down  │  │
+  │   │   :9090         │ - - - - - - - - - ► │  mq-node-3  :9157  (Replica)    ❌ down  │  │
   │   │                 │ ──────────────────► │  mq-node-4  :9157  (Active QM2) ✅ up    │  │
-  │   │                 │ - - - - - - - - - ►  │  mq-node-5  :9157  (Replica)    ❌ down  │  │
-  │   │                 │ - - - - - - - - - ►  │  mq-node-6  :9157  (Replica)    ❌ down  │  │
+  │   │                 │ - - - - - - - - - ► │  mq-node-5  :9157  (Replica)    ❌ down  │  │
+  │   │                 │ - - - - - - - - - ► │  mq-node-6  :9157  (Replica)    ❌ down  │  │
   │   │                 │                     └──────────────────────────────────────────┘  │
   │   └────────┬────────┘                                                                   │
   │            │ scrape host.containers.internal:8080 /q/metrics                            │
