@@ -27,7 +27,7 @@ public class MQConnectionFactoryProducer {
             LOG.info("Use CCDT: " + ccdtUrl);
             LOG.debug("CCDT URL set — skipping connectionList and channel");
         } else {
-            factory.setConnectionNameList(config.connectionList());
+            factory.setConnectionNameList(config.connectionList().filter(s -> !s.isBlank()).orElse(null));
             factory.setChannel(config.channel());
             LOG.info("Use Connection List: " + config.connectionList());
             LOG.debug("Connection list: " + config.connectionList() + ", channel: " + config.channel());

@@ -13,7 +13,7 @@ public interface MQConfig {
     Optional<String> ccdtUrl();
 
     @WithDefault("")
-    String connectionList();
+    Optional<String> connectionList();
 
     @WithDefault("")
     String channel();
