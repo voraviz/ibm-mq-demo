@@ -131,6 +131,7 @@ Prometheus started:
   ```
 
   ![](images/promql-put-tps.png)
+  
   - GET tps in last 5 minutes by Queue Manager  
   ```
   sum(rate(ibmmq_qmgr_destructive_get_total[5m])) by (qmgr)
@@ -138,6 +139,14 @@ Prometheus started:
 
   ![](images/promql-get-tps.png)
 
+  - Check replicaition backlog
+    
+  ```
+  ibmmq_nha_replication_backlog_bytes  
+  ```  
+    Stop mq-node-3 and continuously put messages
+  
+  ![](images/promql-backlog.png)
 ### Grafana
 - Start Prometheus container with [start-prometheus.sh](obs-app/etc/start-grafana.sh)
 ```bash
@@ -239,4 +248,3 @@ Jaeger listens on:
 Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **all-in-one**, and click **Find Traces** to view distributed traces.
 
 ![](images/jaeger-traces.png)
-
