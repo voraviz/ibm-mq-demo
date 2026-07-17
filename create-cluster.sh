@@ -10,7 +10,7 @@ for i in mq-node-1-data mq-node-2-data mq-node-3-data mq-node-4-data mq-node-5-d
 done
 TAG=10.0.0.0-r1-amd64
 MQ_PORT=1414
-MQ_PROMETHEUS_PORT=9517
+MQ_PROMETHEUS_PORT=9157
 MQ_CONSOLE_PORT=9443
 QUEUE_MANAGER=QM1
 QUEUE_MANAGER_LOWER=qm1
@@ -30,7 +30,7 @@ do
   --cpus 1 --memory 800m \
   -p $MQ_PORT:1414 \
   -p $MQ_CONSOLE_PORT:9443 \
-  -p $MQ_PROMETHEUS_PORT:9517 \
+  -p $MQ_PROMETHEUS_PORT:9157 \
   -v mq-node-$i-data:/var/mqm \
   -v ./mq-native-ha/config/qm-node$i-cluster.ini:/etc/mqm/native-ha.ini:ro \
   -v ./mq-native-ha/config/config.cluster.mqsc:/etc/mqm/config.mqsc:ro \
@@ -57,7 +57,7 @@ clear
 echo "Wait for QM2 Native HA setting..."
 sleep 60
 QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-echo "QM2 Active on: $QM1_ACTIVE_NODE"
+echo "QM2 Active on: $QM2_ACTIVE_NODE"
 sleep 10
 clear
 echo "Wait for cluster setup..."

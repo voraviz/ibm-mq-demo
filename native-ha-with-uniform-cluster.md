@@ -9,6 +9,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Architecture](#architecture)
   - [MQ Configuration](#mq-configuration)
     - [Prerequisites](#prerequisites)
+    - [Quick Start (Automated)](#quick-start-automated)
     - [Create Network and Volumes](#create-network-and-volumes)
     - [Create Secrets](#create-secrets)
     - [Node Configuration](#node-configuration)
@@ -69,6 +70,28 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
 
 - [Podman](https://podman.io/) (or Docker) installed.
 - On Apple Silicon (M-series), all `podman run` commands include `--platform linux/amd64` because IBM does not publish an arm64 MQ server container image — it is available only for `linux/amd64`, `linux/s390x`, and `linux/ppc64le`.
+
+### Quick Start (Automated)
+
+[`create-cluster.sh`](create-cluster.sh) automates the full setup in one command — it replaces the manual steps in [Create Network and Volumes](#create-network-and-volumes), [Start Containers](#start-containers), and [Verify the Cluster](#verify-the-cluster).
+
+```bash
+./create-cluster.sh
+```
+
+What the script does, in order:
+
+1. **Stops and removes** any existing `mq-node-1` … `mq-node-6` containers
+2. **Recreates all six volumes** on a clean slate
+3. **Starts all six containers** with the cluster configuration (nodes 1–3 → QM1, nodes 4–6 → QM2)
+4. Waits **60 s** then shows `podman ps` to confirm all containers are running
+5. Waits another **60 s** for QM1 Native HA leader election and prints the active node
+6. Waits another **60 s** for QM2 Native HA leader election and prints the active node
+7. Waits a final **60 s** then runs `DISPLAY CLUSQMGR(*)` on both QM1 and QM2 to confirm cluster membership
+
+> The Podman secrets `mqAdminPassword` and `mqAppPassword` must already exist before running this script — see [Create Secrets](#create-secrets).
+
+---
 
 ### Create Network and Volumes
 
