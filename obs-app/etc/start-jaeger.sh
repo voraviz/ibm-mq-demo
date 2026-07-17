@@ -7,7 +7,7 @@ set -e
 
 echo "Starting Jaeger..."
 
-podman run --name obs-jaeger \
+podman run --name jaeger \
   -p 16686:16686 \
   -p 14268:14268 \
   -p 14250:14250 \
