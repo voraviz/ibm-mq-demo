@@ -293,9 +293,24 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
         "connection": [
           {"host": "127.0.0.1", "port": 1414},
           {"host": "127.0.0.1", "port": 1415},
-          {"host": "127.0.0.1", "port": 1416}
+          {"host": "127.0.0.1", "port": 1416},
+          {"host": "127.0.0.1", "port": 1417},
+          {"host": "127.0.0.1", "port": 1418},
+          {"host": "127.0.0.1", "port": 1419}
         ],
         "queueManager": "UNIQA"
+      },
+      "type": "clientConnection"
+    },
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
+          {"host": "127.0.0.1", "port": 1414},
+          {"host": "127.0.0.1", "port": 1415},
+          {"host": "127.0.0.1", "port": 1416}
+        ],
+        "queueManager": "QM1" 
       },
       "type": "clientConnection"
     },
@@ -307,7 +322,7 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
           {"host": "127.0.0.1", "port": 1418},
           {"host": "127.0.0.1", "port": 1419}
         ],
-        "queueManager": "UNIQA"
+        "queueManager": "QM2" 
       },
       "type": "clientConnection"
     }
