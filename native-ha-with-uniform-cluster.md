@@ -527,24 +527,36 @@ This walkthrough demonstrates how a Uniform Cluster distributes application work
 Open a terminal and run from the repository root:
 
 ```bash
-./check-app-balancing-status.sh
+./check-app-balancing-status.sh <appltag>
 ```
 
-**2. Start Golang Apps**
+> The `<appltag>` value depends on which test app you use:
+> - Java all-in-one-app → `jack`
+> - Golang app → `keshi`
 
-Open another terminal and run from the repository root:
+**2. Start Test Apps**
 
+Open another terminal and run from the repository root.
+
+*Golang app* — starts 10 `api-app-go` instances on ports 8100–8109:
 ```bash
 ./start-go-lang-apps.sh
 ```
 
-- Start 10 `api-app-go` instances from port 8100 to 8109 in background mode
-- Send 10 messages to each instance and start the listener
+*Java all-in-one-app* — starts 10 Quarkus instances on ports 9090–9099:
+```bash
+./start-all-in-one-apps.sh
+```
+
+Both scripts:
+- Start 10 instances in background mode
+- Send 10 messages to each instance
+- Start the message listener on each instance
 - Write logs to the `logs/` directory
 
 **3. Check App Status**
 
-`BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections. 
+`BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections.
 
 ![](images/apps-still-not-balanced.png)
 
@@ -555,49 +567,48 @@ It transitions to `YES` once all 10 application instances have settled evenly ac
 
 **4. Cleanup**
 
-Run [clear-go-lang-apps.sh](clear-go-lang-apps.sh) to stop all running `api-app-go` processes and remove the log files:
-- Kill all `api-app-go` processes
-- Remove all `logs/*.log` files
+*Golang app* — run [clear-go-lang-apps.sh](clear-go-lang-apps.sh) to stop all `api-app-go` processes and remove log files:
 
 ```bash
 ./clear-go-lang-apps.sh
 ```
-Output
+
+*Java all-in-one-app* — run [clear-all-in-one-apps.sh](clear-all-in-one-apps.sh) to stop all Quarkus processes and remove log files:
+
 ```bash
-Kill pid: 11003
-Kill pid: 11043
-Kill pid: 11082
-Kill pid: 11121
-Kill pid: 11163
-Kill pid: 11207
-Kill pid: 11254
-Kill pid: 11293
-Kill pid: 11334
-Kill pid: 11373
+./clear-all-in-one-apps.sh
 ```
 
 **5. [Optional] Bash Scripts**
 - MQSC command check Application Status
   
   ```bash
-  DISPLAY APSTATUS('keshi') TYPE (APPL)
+  DISPLAY APSTATUS('<appltag>') TYPE(APPL)
   ```
 
-  Run with podman exec
+  Run with podman exec (replace `jack` / `keshi` with your application tag)
 
   ```bash
-  podman exec $QM1_ACTIVE_NODE bash -c 'echo "DISPLAY APSTATUS('"'"'keshi'"'"') TYPE (APPL)" | runmqsc QM1'
+  APPLTAG=jack
+  podman exec "$QM1_ACTIVE_NODE" \
+      bash -c "echo \"DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)\" | runmqsc QM1"
   ```
 
 - MQSC command to check connections
 
   ```bash
-  DISPLAY conn(*) where(appltag eq 'keshi') conntag
+  DISPLAY conn(*) where(appltag eq '<appltag>') conntag
   ```
 
   Run with bash shell to count number of connections
 
   ```bash
-  QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-  QM1_CONN=$(podman exec $QM1_ACTIVE_NODE bash -c 'echo "dis conn(*) where(appltag eq '"'"'keshi'"'"') conntag" | runmqsc QM1' | grep APPLTAG | wc -l|sed 's/^[ \t]*//')
+  APPLTAG=jack   # or keshi for the Golang app
+  QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x \
+      | grep "ROLE(Active)" | grep -v QMNAME \
+      | awk '{print $3}' \
+      | sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+  QM1_CONN=$(podman exec "$QM1_ACTIVE_NODE" \
+      bash -c "echo \"dis conn(*) where(appltag eq '$APPLTAG') conntag\" | runmqsc QM1" \
+      | grep -c "APPLTAG")
   ```
