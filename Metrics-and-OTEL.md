@@ -12,9 +12,12 @@
   ┌─────────────────────────────── mq-ha-net (podman network) ──────────────────────────────┐
   │                                                                                         │
   │   ┌─────────────────┐   scrape :9157      ┌──────────────────────────────────────────┐  │
-  │   │                 │ ──────────────────► │  IBM MQ node-1  :9157 /metrics           │  │
-  │   │   Prometheus    │ ──────────────────► │  IBM MQ node-2  :9157 /metrics           │  │
-  │   │   :9090         │ ──────────────────► │  IBM MQ node-3  :9157 /metrics           │  │
+  │   │                 │ ──────────────────► │  mq-node-1  :9157  (Active QM1) ✅ up    │  │
+  │   │   Prometheus    │ - - - - - - - - - ►  │  mq-node-2  :9157  (Replica)    ❌ down  │  │
+  │   │   :9090         │ - - - - - - - - - ►  │  mq-node-3  :9157  (Replica)    ❌ down  │  │
+  │   │                 │ ──────────────────► │  mq-node-4  :9157  (Active QM2) ✅ up    │  │
+  │   │                 │ - - - - - - - - - ►  │  mq-node-5  :9157  (Replica)    ❌ down  │  │
+  │   │                 │ - - - - - - - - - ►  │  mq-node-6  :9157  (Replica)    ❌ down  │  │
   │   │                 │                     └──────────────────────────────────────────┘  │
   │   └────────┬────────┘                                                                   │
   │            │ scrape host.containers.internal:8080 /q/metrics                            │
@@ -67,7 +70,39 @@ Sample metrics
 | ibmmq_nha_synchronous_log_sent_bytes_in_doubt | Log bytes not yet acknowledged by replica |
 | ibmmq_nha_synchronous_log_sent_bytes          | Log bytes replicated synchronously        | -->
 
-Remark: For Native HA, metrics will available on active node only
+### Native HA behaviour — metrics on Active node only
+
+IBM MQ's web server (and therefore the Prometheus `/metrics` endpoint on port 9157) **only starts on the Active node**. Replica nodes perform Raft log replication only — the queue manager process does not run on them, so port 9157 is closed and Prometheus reports `connection refused`.
+
+| Node | Role | Port 9157 | Prometheus status |
+|---|---|---|---|
+| `mq-node-1` | Active (QM1) | ✅ open | `up` |
+| `mq-node-2` | Replica | ❌ closed | `down` — connection refused |
+| `mq-node-3` | Replica | ❌ closed | `down` — connection refused |
+| `mq-node-4` | Active (QM2) | ✅ open | `up` |
+| `mq-node-5` | Replica | ❌ closed | `down` — connection refused |
+| `mq-node-6` | Replica | ❌ closed | `down` — connection refused |
+
+This is **expected and correct**. After a failover, whichever node is elected Active starts the web server and Prometheus automatically begins scraping it on the next `scrape_interval` (15 s). No configuration change is needed.
+
+> **Avoid false alerts:** Do not alert on individual node `up == 0`. Instead alert only when **all nodes in an HA group are down simultaneously**, which indicates a true outage:
+>
+> ```yaml
+> groups:
+>   - name: mq-ha
+>     rules:
+>       - alert: MQGroup1AllNodesDown
+>         expr: count(up{job=~"mq-node-[123]"} == 1) == 0
+>         for: 30s
+>         annotations:
+>           summary: "All QM1 HA nodes are unreachable — possible full HA-GROUP-1 outage"
+>
+>       - alert: MQGroup2AllNodesDown
+>         expr: count(up{job=~"mq-node-[456]"} == 1) == 0
+>         for: 30s
+>         annotations:
+>           summary: "All QM2 HA nodes are unreachable — possible full HA-GROUP-2 outage"
+> ```
 
 
 
