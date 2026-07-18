@@ -6,9 +6,12 @@ import io.quarkus.websockets.next.OpenConnections;
 import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 @WebSocket(path = "/ws/messages")
 public class MessageWebSocket {
+
+    private static final Logger LOG = Logger.getLogger(MessageWebSocket.class);
 
     @Inject
     OpenConnections openConnections;
@@ -24,6 +27,12 @@ public class MessageWebSocket {
     }
 
     public void broadcast(String message) {
-        openConnections.forEach(conn -> conn.sendText(message).subscribeAsCompletionStage().join());
+        // Fire-and-forget per connection: never block the caller (the MQ consumer
+        // thread), and isolate failures so one dead/slow client can't stop delivery
+        // to the others — or, if this threw, kill the consumer thread.
+        openConnections.forEach(conn -> conn.sendText(message).subscribe().with(
+                ignored -> {},
+                err -> LOG.warnf("WebSocket send failed for connection %s: %s",
+                        conn.id(), err.getMessage())));
     }
 }

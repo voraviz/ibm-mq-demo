@@ -15,6 +15,9 @@ public interface MQConfig {
     @WithDefault("")
     Optional<String> connectionList();
 
+    @WithName("client-reconnect-timeout")
+    int clientReconnectTimeout();
+
     @WithDefault("")
     String channel();
 

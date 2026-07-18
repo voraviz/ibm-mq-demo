@@ -1,8 +1,9 @@
 package com.example.resource;
 
 import io.micrometer.core.annotation.Counted;
-import io.smallrye.reactive.messaging.annotations.Channel;
-import io.smallrye.reactive.messaging.annotations.Emitter;
+import io.smallrye.mutiny.Uni;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -61,20 +62,38 @@ public class MessageResource {
             description = "Request body is missing or the text field is blank",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
                                schema = @Schema(implementation = StatusResponse.class))
+        ),
+        @APIResponse(
+            responseCode = "500",
+            description = "The message could not be enqueued to IBM MQ",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                               schema = @Schema(implementation = StatusResponse.class))
         )
     })
     @Counted(value = "mq.messages.put", description = "Number of messages put to IBM MQ")
-    public Response putMessage(MessageRequest request) {
+    public Uni<Response> putMessage(MessageRequest request) {
         if (request == null || request.text() == null || request.text().isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
+            return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
                     .entity(new StatusResponse("error", "text must not be blank"))
-                    .build();
+                    .build());
         }
         long n = counter.incrementAndGet();
         String body = "[#" + n + "] " + request.text();
         LOG.infof("PUT message: %s", body);
-        emitter.send(body);
-        return Response.accepted(new StatusResponse("sent", body)).build();
+
+        // Await the emitter's acknowledgement so the HTTP response reflects the
+        // actual enqueue outcome instead of returning 202 before the JMS put
+        // completes. The send happens off the event loop on the connector's
+        // worker thread, so this does not block Quarkus' I/O threads.
+        return Uni.createFrom().completionStage(emitter.send(body))
+                .replaceWith(Response.accepted(new StatusResponse("sent", body)).build())
+                .onFailure().recoverWithItem(t -> {
+                    counter.decrementAndGet(); // roll back — the put did not succeed
+                    LOG.errorf(t, "PUT failed for message: %s", body);
+                    return Response.serverError()
+                            .entity(new StatusResponse("error", "failed to enqueue message"))
+                            .build();
+                });
     }
 
     @GET

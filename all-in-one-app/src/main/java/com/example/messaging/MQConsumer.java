@@ -82,7 +82,14 @@ public class MQConsumer {
     private void readLoop() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                jakarta.jms.Message msg = jmsConsumer.receive(500);
+                MessageConsumer consumer = jmsConsumer; // snapshot — may be nulled by stop()/reconnect
+                if (consumer == null) {
+                    if (closing) {
+                        return; // resources torn down under us — nothing to do
+                    }
+                    continue; // transient (mid-reconnect) — re-check interrupt and loop
+                }
+                jakarta.jms.Message msg = consumer.receive(500);
                 if (msg == null) {
                     continue; // timeout — check interrupt and loop
                 }
@@ -91,6 +98,8 @@ public class MQConsumer {
                     LOG.infof("GET message: %s", text);
                     webSocket.broadcast(text);
                     receiveCounter.incrementAndGet();
+                } else {
+                    LOG.warnf("Ignoring non-text message of type: %s", msg.getClass().getName());
                 }
             } catch (JMSException e) {
                 if (closing) {
@@ -99,6 +108,13 @@ public class MQConsumer {
                 }
                 LOG.warnf("MQ consumer disconnected unexpectedly: %s — reconnecting", e.getLocalizedMessage());
                 reconnectLoop();
+            } catch (RuntimeException e) {
+                if (closing) {
+                    return; // shutdown race (e.g. NPE from a nulled consumer) — expected
+                }
+                // Never let an unexpected runtime error kill the listener thread and
+                // leave the consumer silently dead while isRunning() still reports true.
+                LOG.error("Unexpected error in MQ consumer loop — continuing", e);
             }
         }
     }
