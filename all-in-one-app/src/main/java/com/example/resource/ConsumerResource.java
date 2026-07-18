@@ -98,12 +98,12 @@ public class ConsumerResource {
     }
 
     public record StatusResponse(
-        @Schema(description = "Consumer status value: 'running', 'started', or 'stopped'", example = "running")
+        @Schema(description = "Consumer status value: 'running', 'started', or 'stopped'", examples = {"running"})
         String status
     ) {}
 
     public record CountResponse(
-        @Schema(description = "Total number of messages consumed from IBM MQ", example = "42")
+        @Schema(description = "Total number of messages consumed from IBM MQ", examples = {"42"})
         long count
     ) {}
 }

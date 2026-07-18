@@ -115,20 +115,20 @@ public class MessageResource {
     }
 
     public record MessageRequest(
-        @Schema(description = "Text content of the message to send to IBM MQ", example = "Hello IBM MQ!")
+        @Schema(description = "Text content of the message to send to IBM MQ", examples = {"Hello IBM MQ!"})
         String text
     ) {}
 
     public record StatusResponse(
-        @Schema(description = "Outcome status: 'sent' or 'error'", example = "sent")
+        @Schema(description = "Outcome status: 'sent' or 'error'", examples ={ "sent","error"})
         String status,
 
-        @Schema(description = "The formatted message body that was enqueued, or an error description", example = "[#1] Hello IBM MQ!")
+        @Schema(description = "The formatted message body that was enqueued, or an error description", examples = {"[#1] Hello IBM MQ!"})
         String message
     ) {}
 
     public record CountResponse(
-        @Schema(description = "Total number of messages sent to IBM MQ since startup", example = "7")
+        @Schema(description = "Total number of messages sent to IBM MQ since startup", examples = {"7"})
         long count
     ) {}
 }

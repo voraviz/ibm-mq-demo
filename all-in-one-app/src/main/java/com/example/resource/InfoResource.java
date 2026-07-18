@@ -114,13 +114,13 @@ public class InfoResource {
     }
 
     public record InfoResponse(
-        @Schema(description = "Name of the connected queue manager", example = "QM1")
+        @Schema(description = "Name of the connected queue manager", examples = {"QM1"})
         String queueManager,
 
-        @Schema(description = "Hostname or IP address of the IBM MQ server", example = "localhost")
+        @Schema(description = "Hostname or IP address of the IBM MQ server", examples = {"localhost"})
         String host,
 
-        @Schema(description = "Port number of the IBM MQ listener", example = "1414")
+        @Schema(description = "Port number of the IBM MQ listener", examples = {"1414"})
         int port,
 
         @Schema(description = "Whether a live connection to IBM MQ was established successfully")
