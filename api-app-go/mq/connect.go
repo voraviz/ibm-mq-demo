@@ -89,7 +89,7 @@ func dial(cfg *config.Config, reconnect bool) (ibmmq.MQQueueManager, string, err
 		} else {
 			cd.ConnectionName = fmt.Sprintf("%s(%d)", cfg.Host, cfg.Port)
 		}
-		cd.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+		cd.HeartbeatInterval = int32(cfg.HeartbeatInterval)
 		cno.ClientConn = cd
 		connDesc = cd.ConnectionName
 		log.Printf("MQ connect: qmgr=%s conn=%s channel=%s user=%s", cfg.QueueManager, cd.ConnectionName, cd.ChannelName, cfg.Username)

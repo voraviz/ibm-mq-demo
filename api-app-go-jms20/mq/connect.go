@@ -147,7 +147,7 @@ func mqOptions(cfg *config.Config, reconnect bool) jms20subset.MQOptions {
 		} else {
 			// Override ConnectionName with the full multi-host list.
 			cno.ClientConn.ConnectionName = connectionName(cfg)
-			cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+			cno.ClientConn.HeartbeatInterval = int32(cfg.HeartbeatInterval)
 		}
 	}
 }

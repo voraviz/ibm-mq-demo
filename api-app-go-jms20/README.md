@@ -31,7 +31,7 @@ Both libraries use CGO and require the IBM MQ C client redistributable at build 
 | `IBM_MQ_USERNAME` | `app` | Username |
 | `IBM_MQ_PASSWORD` | `passw0rd` | Password |
 | `IBM_MQ_QUEUE` | `DEV.DEMO.QL.IN` | Queue to read/write |
-| `IBM_MQ_RECONNECT_TIMEOUT` | `30` | Heartbeat/reconnect timeout in seconds |
+| `IBM_MQ_HEARTBEAT_INTERVAL` | `5` | Client channel heartbeat interval, in seconds |
 | `MQAPPLNAME` | `API-APP-GO-JMS20` | Application name shown in `DISPLAY APSTATUS` |
 
 ### Connection modes

@@ -23,6 +23,7 @@ type Consumer struct {
 	jmsCons  jms20subset.JMSConsumer
 	stopping bool
 	started  bool
+	wg       sync.WaitGroup // tracks the read goroutine so Stop can wait for it
 
 	counter atomic.Int64
 }
@@ -53,22 +54,31 @@ func (c *Consumer) Start() {
 	}
 	c.stopping = false
 	c.started = true
+	c.wg.Add(1)
 	go c.readLoop()
 	log.Printf("MQ consumer started — listening on queue: %s", c.cfg.Queue)
 }
 
-// Stop signals the read goroutine to exit and closes JMS resources.
-// Idempotent — safe to call when already stopped.
+// Stop signals the read goroutine to exit and waits for it to close the JMS
+// resources it owns. The goroutine — never Stop — performs the JMSConsumer/
+// JMSContext close, so JMS verbs are never issued against the context from two
+// goroutines at once. Idempotent — safe to call when already stopped.
 func (c *Consumer) Stop() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.started {
+		c.mu.Unlock()
 		return
 	}
 	c.stopping = true
-	c.closeResources()
+	c.mu.Unlock()
+
+	// Wait for readLoop to observe the flag, exit, and release the handles.
+	// Bounded by the 500ms Receive wait (or ~1s reconnect backoff).
+	c.wg.Wait()
+
+	c.mu.Lock()
 	c.started = false
+	c.mu.Unlock()
 	log.Println("MQ consumer stopped")
 }
 
@@ -121,6 +131,15 @@ func (c *Consumer) closeResources() {
 // readLoop polls the queue every 500ms (matching the Java 500ms JMS receive
 // timeout). On JMS error it calls reconnectLoop; on stop signal it exits.
 func (c *Consumer) readLoop() {
+	defer c.wg.Done()
+	// The read goroutine owns the JMS resources: it is the only place they are
+	// closed, so Stop()/reconnect never race an in-flight Receive on them.
+	defer func() {
+		c.mu.Lock()
+		c.closeResources()
+		c.mu.Unlock()
+	}()
+
 	for {
 		c.mu.Lock()
 		stopping := c.stopping

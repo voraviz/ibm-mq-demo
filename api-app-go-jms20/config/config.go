@@ -9,17 +9,17 @@ import (
 // variables; defaults mirror api-app/src/main/resources/application.properties.
 type Config struct {
 	// IBM MQ connection
-	CcdtUrl          string // IBM_MQ_CCDT_URL — if set, overrides ConnectionList + Channel
-	ConnectionList   string // IBM_MQ_CONNECTION_LIST
-	Host             string // IBM_MQ_HOST
-	Port             int    // IBM_MQ_PORT
-	AppName          string // MQAPPLNAME
-	Channel          string // IBM_MQ_CHANNEL
-	QueueManager     string // IBM_MQ_QUEUE_MANAGER
-	Username         string // IBM_MQ_USERNAME
-	Password         string // IBM_MQ_PASSWORD
-	Queue            string // IBM_MQ_QUEUE
-	ReconnectTimeout int    // IBM_MQ_RECONNECT_TIMEOUT — seconds before a reconnect attempt gives up
+	CcdtUrl           string // IBM_MQ_CCDT_URL — if set, overrides ConnectionList + Channel
+	ConnectionList    string // IBM_MQ_CONNECTION_LIST
+	Host              string // IBM_MQ_HOST
+	Port              int    // IBM_MQ_PORT
+	AppName           string // MQAPPLNAME
+	Channel           string // IBM_MQ_CHANNEL
+	QueueManager      string // IBM_MQ_QUEUE_MANAGER
+	Username          string // IBM_MQ_USERNAME
+	Password          string // IBM_MQ_PASSWORD
+	Queue             string // IBM_MQ_QUEUE
+	HeartbeatInterval int    // IBM_MQ_HEARTBEAT_INTERVAL — client channel heartbeat interval, in seconds
 
 	// HTTP server
 	ServerPort string // SERVER_PORT
@@ -44,17 +44,17 @@ func getenvInt(key string, def int) int {
 // Load reads configuration from environment variables with defaults.
 func Load() *Config {
 	return &Config{
-		CcdtUrl:          getenv("IBM_MQ_CCDT_URL", ""),
-		ConnectionList:   getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
-		Host:             getenv("IBM_MQ_HOST", "localhost"),
-		Port:             getenvInt("IBM_MQ_PORT", 1414),
-		AppName:          getenv("MQAPPLNAME", "API-APP-GO-JMS20"),
-		Channel:          getenv("IBM_MQ_CHANNEL", "DEV.APP.SVRCONN"),
-		QueueManager:     getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
-		Username:         getenv("IBM_MQ_USERNAME", "app"),
-		Password:         getenv("IBM_MQ_PASSWORD", "passw0rd"),
-		Queue:            getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
-		ReconnectTimeout: getenvInt("IBM_MQ_RECONNECT_TIMEOUT", 30),
-		ServerPort:       getenv("SERVER_PORT", "8081"),
+		CcdtUrl:           getenv("IBM_MQ_CCDT_URL", ""),
+		ConnectionList:    getenv("IBM_MQ_CONNECTION_LIST", "localhost(1414),localhost(1415),localhost(1416)"),
+		Host:              getenv("IBM_MQ_HOST", "localhost"),
+		Port:              getenvInt("IBM_MQ_PORT", 1414),
+		AppName:           getenv("MQAPPLNAME", "API-APP-GO-JMS20"),
+		Channel:           getenv("IBM_MQ_CHANNEL", "DEV.APP.SVRCONN"),
+		QueueManager:      getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
+		Username:          getenv("IBM_MQ_USERNAME", "app"),
+		Password:          getenv("IBM_MQ_PASSWORD", "passw0rd"),
+		Queue:             getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
+		HeartbeatInterval: getenvInt("IBM_MQ_HEARTBEAT_INTERVAL", 5),
+		ServerPort:        getenv("SERVER_PORT", "8081"),
 	}
 }

@@ -1,11 +1,18 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/ibm-messaging/ibm_mq/api-app-go-jms20/config"
 	"github.com/ibm-messaging/ibm_mq/api-app-go-jms20/mq"
 )
+
+// probeTimeout bounds how long /api/info waits for the MQ probe before giving
+// up and reporting disconnected. The probe dials each HA node sequentially, so
+// an unreachable node could otherwise stall the request thread.
+const probeTimeout = 3 * time.Second
 
 // InfoHandler handles GET /api/info.
 type InfoHandler struct {
@@ -35,18 +42,35 @@ func (h *InfoHandler) GetInfo(w http.ResponseWriter, r *http.Request) {
 		Connected:    false,
 	}
 
-	result, err := mq.Probe(h.cfg)
-	if err == nil {
-		resp.Connected = true
-		if result.Name != "" {
-			resp.QueueManager = result.Name
+	// Run the (blocking, non-context-aware) MQ probe in a goroutine and bound
+	// it with probeTimeout. The buffered channel lets the goroutine finish and
+	// Close() on its own even if we've already timed out — no leak.
+	type probeOutcome struct {
+		r   mq.ProbeResult
+		err error
+	}
+	ch := make(chan probeOutcome, 1)
+	go func() {
+		r, err := mq.Probe(h.cfg)
+		ch <- probeOutcome{r, err}
+	}()
+
+	select {
+	case out := <-ch:
+		if out.err == nil {
+			resp.Connected = true
+			if out.r.Name != "" {
+				resp.QueueManager = out.r.Name
+			}
+			if out.r.Host != "" {
+				resp.Host = out.r.Host
+			}
+			if out.r.Port != 0 {
+				resp.Port = out.r.Port
+			}
 		}
-		if result.Host != "" {
-			resp.Host = result.Host
-		}
-		if result.Port != 0 {
-			resp.Port = result.Port
-		}
+	case <-time.After(probeTimeout):
+		log.Printf("MQ info probe timed out after %s — reporting disconnected", probeTimeout)
 	}
 
 	writeJSON(w, http.StatusOK, resp)

@@ -4,9 +4,15 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// writeTimeout bounds a single broadcast write. Without it, one dead-but-not-
+// closed client could block WriteMessage indefinitely and stall the consumer
+// goroutine (and, while the lock was held, all register/unregister calls).
+const writeTimeout = 5 * time.Second
 
 var upgrader = websocket.Upgrader{
 	// Allow all origins — matches Java's open CORS policy
@@ -37,15 +43,26 @@ func (h *Hub) unregister(conn *websocket.Conn) {
 	h.mu.Unlock()
 }
 
-// Broadcast sends msg as a text frame to every connected client.
-// Connections that fail are silently removed (they will be cleaned up
-// by their own read pump goroutine).
+// Broadcast sends msg as a text frame to every connected client, each write
+// bounded by writeTimeout. A failed/timed-out write closes that connection so
+// its read pump wakes and unregisters it; delivery to the other clients is
+// unaffected.
 func (h *Hub) Broadcast(msg string) {
+	// Snapshot the connections so a slow client can't block register/unregister
+	// (which need the write lock) while we write. Broadcast is only ever called
+	// from the single consumer goroutine, so writes are never concurrent.
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	conns := make([]*websocket.Conn, 0, len(h.conns))
 	for conn := range h.conns {
+		conns = append(conns, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range conns {
+		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
-			log.Printf("ws: broadcast write error: %v", err)
+			log.Printf("ws: broadcast write error: %v — closing", err)
+			conn.Close() // wakes the read pump; it unregisters the connection
 		}
 	}
 }
