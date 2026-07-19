@@ -16,18 +16,18 @@ the **active** queue manager node.
 
 ```
                        ┌────────────────────────────────────────────────┐
-                       │                api-app-go (:8081)               │
-  HTTP / WS client     │                                                 │
-  ┌───────────────┐    │  POST /api/messages ─▶ Producer.Put             │
-  │  send message │────┼──────────────────────▶ (fresh MQCONN per call)──┼──PUT──┐
-  └───────────────┘    │                                                 │       │  ┌──────────┐
-                       │                                                 │       └─▶│          │
-  ┌───────────────┐    │  ws.Hub.Broadcast ◀── Consumer.readLoop ◀───────┼──GET────│  IBM MQ  │
-  │ live feed (WS)│◀───┼── /ws/messages         (background goroutine)    │        │  queue   │
-  └───────────────┘    │                                                 │        └──────────┘
-  ┌───────────────┐    │  GET /api/info ─▶ mq.Probe (resolve active node)│
-  │ status / info │◀───┼── (3s timeout)                                  │
-  └───────────────┘    │  GET /metrics ─▶ Prometheus registry            │
+                       │                api-app-go (:8081)              │
+  HTTP / WS client     │                                                │
+  ┌───────────────┐    │  POST /api/messages ─▶ Producer.Put            │
+  │  send message │────┼──────────────────────▶ (fresh MQCONN per call)─┼──PUT─┐
+  └───────────────┘    │                                                │      │  ┌──────────┐
+                       │                                                │      └─▶│          │
+  ┌───────────────┐    │  ws.Hub.Broadcast ◀── Consumer.readLoop ◀──────┼──GET────│  IBM MQ  │
+  │ live feed (WS)│◀───┼── /ws/messages         (background goroutine)  │         │  queue   │
+  └───────────────┘    │                                                │         └──────────┘
+  ┌───────────────┐    │ GET /api/info ─▶ mq.Probe (resolve active node)│
+  │ status / info │────┼─▶ (2s timeout)                                 │
+  └───────────────┘    │ GET /metrics ─▶ Prometheus registry            │
                        └────────────────────────────────────────────────┘
 ```
 
