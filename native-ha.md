@@ -19,6 +19,7 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
     - [All-in-one Java Application](#all-in-one-java-application)
     - [Golang REST API](#golang-rest-api)
     - [Golang JMS REST API](#golang-jms-rest-api)
+  - [Reconnect behaviour: producer vs consumer](#reconnect-behaviour-producer-vs-consumer)
   - [Failover Test](#failover-test)
 
 ---
@@ -428,9 +429,10 @@ public class MQConnectionFactoryProducer {
         factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
         // WMQ_CLIENT_RECONNECT retries indefinitely across all hosts in the
         // connection name list (or CCDT) until the active node is found.
-        // WMQ_CLIENT_RECONNECT_TIMEOUT caps each individual reconnect attempt.
+        // WMQ_CLIENT_RECONNECT_TIMEOUT caps each individual reconnect attempt
+        // (ibm.mq.client-reconnect-timeout, default 5 s).
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
-        factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, 30);
+        factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, config.clientReconnectTimeout());
         return factory;
     }
 }
@@ -586,9 +588,9 @@ func Load() *Config {
         QueueManager:     getenv("IBM_MQ_QUEUE_MANAGER", "QM1"),
         Username:         getenv("IBM_MQ_USERNAME", "app"),
         Password:         getenv("IBM_MQ_PASSWORD", "passw0rd"),
-        Queue:            getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
-        ReconnectTimeout: getenvInt("IBM_MQ_RECONNECT_TIMEOUT", 30),
-        ServerPort:       getenv("SERVER_PORT", "8081"),
+        Queue:             getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
+        HeartbeatInterval: getenvInt("IBM_MQ_HEARTBEAT_INTERVAL", 5),
+        ServerPort:        getenv("SERVER_PORT", "8081"),
     }
 }
 ```
@@ -605,7 +607,16 @@ cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
     ibmmq.MQCNO_RECONNECT
 ```
 
-`cd.HeartbeatInterval` is set to `ReconnectTimeout` (default 30 s), matching the Java `WMQ_CLIENT_RECONNECT_TIMEOUT` behaviour — a stalled reconnect attempt is abandoned after this period.
+`MQCNO_RECONNECT` is what makes failover transparent: when the connection drops, the
+MQ client library reconnects through the connection name list (or CCDT) automatically,
+blocking in-flight MQI calls rather than failing them.
+
+`cd.HeartbeatInterval` is set to `HeartbeatInterval` (env `IBM_MQ_HEARTBEAT_INTERVAL`,
+default 5 s). This is the **channel heartbeat interval** — it governs how quickly a dead
+connection is *detected*, not a reconnect timeout. It is distinct from the Java app's
+`WMQ_CLIENT_RECONNECT_TIMEOUT`, which is a genuine cap on each reconnect attempt; the two
+apps are not equivalent on this point. The Go consumer's own retry cadence lives in
+`reconnectLoop()` (a hard-coded 1 s between attempts, see below), not in this setting.
 
 **Prerequisites — IBM MQ C client libraries**
 
@@ -691,18 +702,22 @@ func (p *Producer) Put(text string) (string, error) {
 }
 ```
 
-This gives two properties that differ from the Java SmallRye emitter:
+The Java `all-in-one-app` producer reaches the same guarantees a different way. Its
+`MessageResource.putMessage()` uses a SmallRye Reactive Messaging emitter (`@Channel("mq-put")`,
+`smallrye-jms` connector) over a **long-lived** connection, and **awaits the emitter's
+acknowledgement** before responding — so the two backends now behave equivalently:
 
 | | Java `all-in-one-app` | Go `api-app-go` |
 |--|--|--|
-| Counter before delivery | Increments **before** `emitter.send()` | Increments, then **rolled back** on any failure |
-| Counter after failover | May be ahead of actual delivery (gap) | Always equals confirmed deliveries (no gap) |
-| HTTP response on MQ error | `202 Accepted` (fire-and-forget) | `500 Internal Server Error` (explicit error) |
+| Connection model | Long-lived, reused across requests | Fresh connection per `PUT` |
+| Counter on failure | Incremented, then **rolled back** (`decrementAndGet`) | Incremented, then **rolled back** (`counter.Add(-1)`) |
+| Counter after failover | Always equals confirmed deliveries (no gap) | Always equals confirmed deliveries (no gap) |
+| HTTP response on success / MQ error | `202 Accepted` / `500 Internal Server Error` | `202 Accepted` / `500 Internal Server Error` |
+| Failover handling | Client `WMQ_CLIENT_RECONNECT` on the shared connection | `MQCNO_RECONNECT` scoped to that single `PUT` |
 
 Because `PUT /api/messages` returns `500` when the MQ connection fails, the
 `sendOneWithRetry()` loop in the Vue frontend catches it, waits 2 seconds, and retries
-the **same message** — just as it does for the Java backend. The retry loop is identical
-regardless of which backend is used.
+the **same message**. The retry loop is identical regardless of which backend is used.
 
 **Run the UI (`ui-app`):**
 
@@ -768,7 +783,7 @@ func connectOption(cfg *config.Config) jms20subset.MQOptions {
         } else {
             // Override ConnectionName with the full multi-host list.
             cno.ClientConn.ConnectionName = connectionName(cfg)
-            cno.ClientConn.HeartbeatInterval = int32(cfg.ReconnectTimeout)
+            cno.ClientConn.HeartbeatInterval = int32(cfg.HeartbeatInterval)
         }
     }
 }
@@ -810,6 +825,47 @@ IBM_MQ_PASSWORD="passw0rd" \
 IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
 ./api-app-go-jms20
 ```
+
+---
+
+## Reconnect behaviour: producer vs consumer
+
+Every app uses the same **two-layer** model. Layer 1 is the IBM MQ *client library*
+auto-reconnect, which makes HA/cluster failover transparent. Layer 2 is an *application*
+reconnect loop that only runs when Layer 1 gives up and surfaces an error to the app.
+
+| Layer | `all-in-one-app` (Java/JMS) | `api-app-go` (raw `ibmmq`) |
+|--|--|--|
+| **1 — client auto-reconnect** | `WMQ_CLIENT_RECONNECT` on the shared `ConnectionFactory`, capped per attempt by `WMQ_CLIENT_RECONNECT_TIMEOUT` (`ibm.mq.client-reconnect-timeout`, default 5 s) | `MQCNO_RECONNECT` on every connection; `HeartbeatInterval` (`IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) only sets how fast a dead link is *detected* |
+| **2 — app reconnect loop** | `MQConsumer.reconnectLoop()` — rebuild JMS resources every **1 s** | `Consumer.reconnectLoop()` — rebuild qmgr+queue handles every **1 s** |
+
+### Consumer (both apps — near-mirror images)
+
+Long-lived connection with a poll loop:
+
+1. Poll with a **500 ms** receive timeout (`consumer.receive(500)` / `qObj.Get` with `WaitInterval=500`).
+2. Timeout with no message → loop and re-check the stop flag.
+3. Any other error, when **not** shutting down → log "disconnected — reconnecting" and enter the app-level reconnect loop, which tears down and reopens resources every **1 s** until it succeeds or stop is requested.
+
+Because Layer 1 absorbs most failovers transparently, the app-level `reconnectLoop` is the
+**fallback** for when the client library exhausts its reconnect attempt and throws. In Go
+the read goroutine exclusively owns the MQ handles (Stop only sets a flag + `wg.Wait()`),
+so shutdown and reconnect never issue MQI verbs concurrently; the Java consumer achieves
+the same with a `closing` flag, `volatile` handles, and `synchronized` start/stop.
+
+### Producer (the apps differ by design)
+
+- **Java** — long-lived connection via the SmallRye JMS emitter, reused across requests. A
+  failover mid-send is absorbed by Layer 1 (`WMQ_CLIENT_RECONNECT`); only if the client
+  exceeds its reconnect timeout does `emitter.send()` fail → the request returns `500` and
+  rolls back the counter. There is **no** producer-specific app-level retry loop.
+- **Go** — **stateless**: a fresh connection is opened per `PUT` (connect → open → put →
+  disc). There is no persistent connection to "reconnect" — failover *between* requests is
+  a non-event, and failover *during* a request is covered by `MQCNO_RECONNECT` for that one
+  call. On failure the counter is rolled back and the request returns `500`.
+
+In both cases the client (`ui-app` / bundled frontend) retries the failed `PUT` after 2 s,
+so a failover during a bulk send loses no messages.
 
 ---
 
