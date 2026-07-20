@@ -1,0 +1,20 @@
+FROM registry.access.redhat.com/ubi9/openjdk-25:latest
+ENV LANGUAGE='en_US:en'
+USER root
+RUN  microdnf -y update  --setopt=install_weak_deps=0 --nodocs \
+     && microdnf clean all
+# We make four distinct layers so if there are application changes the library layers can be re-used
+COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
+COPY --chown=185 target/quarkus-app/*.jar /deployments/
+COPY --chown=185 target/quarkus-app/app/ /deployments/app/
+COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
+
+EXPOSE 8080
+USER 185
+ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+# The ubi9/openjdk-25 base image's default run script launches JAVA_APP_JAR
+# with JAVA_OPTS — no explicit CMD/ENTRYPOINT needed.
+ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+
+# NOTE: Do NOT use the hardened "hi/openjdk" images here — they strip the
+# runtime such that Quarkus fails to load its config/resources at startup.
