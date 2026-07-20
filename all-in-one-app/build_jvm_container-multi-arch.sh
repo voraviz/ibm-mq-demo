@@ -2,7 +2,7 @@
 CONTAINER_NAME=quay.io/voravitl/simple-mq-app
 PLATFORM=linux/amd64,linux/arm64
 TAG=latest
-DOCKERFILE=hummingbird
+DOCKERFILE=jvm
 IMAGE=$CONTAINER_NAME:$TAG
 podman manifest exists $IMAGE 
 if [ $? -eq 0 ];
