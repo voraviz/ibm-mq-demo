@@ -379,6 +379,20 @@ java -jar target/quarkus-app/quarkus-run.jar
 
 Open [http://localhost:8080](http://localhost:8080) in a browser.
 
+**Run as a container** — pull the published image
+[`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app) and mount the
+container CCDT [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json), which uses
+`host.containers.internal` so the container can reach the MQ ports published on the host:
+
+```bash
+podman run -p 8080:8080 \
+  -v ./ccdt/ccdt.cluster.container.json:/config/ccdt.json:ro \
+  -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
+  -e IBM_MQ_QUEUE_MANAGER="*UNIQA" \
+  -e IBM_MQ_APPLICATION_NAME="jack" \
+  quay.io/voravitl/simple-mq-app:latest
+```
+
 **Application log:**
 
 - Use CCDT:
@@ -581,16 +595,28 @@ Open another terminal and run from the repository root.
 ./start-go-lang-apps.sh
 ```
 
-*Java all-in-one-app* — starts 10 Quarkus instances on ports 9090–9099:
+*Java all-in-one-app (JVM)* — starts 10 Quarkus instances on ports 9090–9099:
 ```bash
 ./start-all-in-one-apps.sh
 ```
 
-Both scripts:
+*Java all-in-one-app (containers)* — starts 10 `all-in-one-app` containers on ports 9190–9199
+from the published image [`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app):
+```bash
+./start-all-in-one-apps-container.sh
+```
+
+The `start-go-lang-apps.sh` and `start-all-in-one-apps.sh` scripts:
 - Start 10 instances in background mode
 - Send 10 messages to each instance
 - Start the message listener on each instance
 - Write logs to the `logs/` directory
+
+[`start-all-in-one-apps-container.sh`](start-all-in-one-apps-container.sh) does the same put/consume
+test, but each instance runs in its own container (capped at 500 MB) connecting via the container
+CCDT [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json)
+(`host.containers.internal`), `IBM_MQ_QUEUE_MANAGER=*UNIQA`, and application tag `jack` — so it shows
+up under the same `jack` tag in `check-app-balancing-status.sh`.
 
 **3. Check App Status**
 

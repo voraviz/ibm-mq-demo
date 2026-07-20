@@ -1,0 +1,16 @@
+{
+  "channel": [
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
+          {"host": "host.containers.internal", "port": 1414},
+          {"host": "host.containers.internal", "port": 1415},
+          {"host": "host.containers.internal", "port": 1416}
+        ],
+        "queueManager": "QM1" 
+      },
+      "type": "clientConnection"
+    }
+  ]
+}

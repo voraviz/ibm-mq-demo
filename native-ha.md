@@ -17,9 +17,12 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
   - [Test Applications](#test-applications)
     - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
     - [All-in-one Java Application](#all-in-one-java-application)
+    - [Batch test with helper scripts](#batch-test-with-helper-scripts)
     - [Golang REST API](#golang-rest-api)
     - [Golang JMS REST API](#golang-jms-rest-api)
   - [Reconnect behaviour: producer vs consumer](#reconnect-behaviour-producer-vs-consumer)
+    - [Consumer (both apps — near-mirror images)](#consumer-both-apps--near-mirror-images)
+    - [Producer (the apps differ by design)](#producer-the-apps-differ-by-design)
   - [Failover Test](#failover-test)
 
 ---
@@ -457,6 +460,47 @@ podman run -p 8080:8080 \
 Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
 
 ![Application connected to mq-node-2](images/mq-app.png)
+
+**Test with the prebuilt container image**
+
+You can skip the local build and test the `all-in-one-app` straight from the published image
+[`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app). Mount the
+Native HA container CCDT [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json) —
+it targets `QM1` across the three nodes using `host.containers.internal`, so the container can reach
+the MQ ports published on the host:
+
+```bash
+podman run -p 8080:8080 \
+  -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
+  -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
+  -e IBM_MQ_QUEUE_MANAGER="QM1" \
+  -e IBM_MQ_APPLICATION_NAME="all-in-one" \
+  quay.io/voravitl/simple-mq-app:latest
+```
+
+Open [http://localhost:8080](http://localhost:8080) — the top menu bar shows which node the app is
+connected to, exactly as with the locally built version.
+
+### Batch test with helper scripts
+
+Two helper scripts at the repository root drive a multi-instance put/consume test end to end:
+
+| Script | Purpose |
+|--------|---------|
+| [`start-all-in-one-apps-container.sh`](start-all-in-one-apps-container.sh) | Starts several `all-in-one-app` containers (host ports `9190`+). For each instance it then sends 10 messages to `POST /api/messages` and starts the consumer via `POST /api/consumer/start`. |
+| [`clear-all-in-one-apps-container.sh`](clear-all-in-one-apps-container.sh) | Stops and force-removes every running `all-in-one-*` container. |
+
+```bash
+./start-all-in-one-apps-container.sh   # start the instances + run the put/consume test
+./clear-all-in-one-apps-container.sh   # tear everything down
+```
+
+> **Note:** `start-all-in-one-apps-container.sh` ships preconfigured for the
+> [Uniform Cluster](native-ha-with-uniform-cluster.md) — `IBM_MQ_QUEUE_MANAGER=*UNIQA` with
+> [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json). For this plain Native HA
+> setup, edit it to use `IBM_MQ_QUEUE_MANAGER=QM1` and mount
+> [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json), as in the single-container
+> command above.
 
 **OpenAPI & Swagger UI**
 
