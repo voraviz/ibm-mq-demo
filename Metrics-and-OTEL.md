@@ -144,10 +144,16 @@ Prometheus started:
   ```
   ibmmq_nha_replication_backlog_bytes  
   ```  
-    Stop mq-node-3 and continuously put messages
+
+  - Show active node on Queue Manager QM1
   
-  ![](images/promql-backlog.png)
-<!-- ### Grafana
+  ```
+  topk(1, count by (job) (ibmmq_nha_replication_backlog_bytes{qmgr="QM1"}))
+  ```
+    <!-- Stop mq-node-3 and continuously put messages -->
+  
+  <!-- ![](images/promql-backlog.png)
+<!-- ### Grafana -->
 - Start Prometheus container with [start-prometheus.sh](obs-app/etc/start-grafana.sh)
 ```bash
 ./start-grafana.sh
