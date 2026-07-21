@@ -38,7 +38,7 @@
 
 ## IBM MQ Metrics
 
-Metrics can be enabled by environment variable *MQ_ENABLE_METRICS=true* for container or use following configuration in MQSC cofig
+Metrics can be enabled by environment variable *MQ_ENABLE_METRICS=true* for container or use following configuration in MQSC config
 
 ```bash
 ALTER QMGR STATMQI(ON) STATQ(ON) STATCHL(LOW) ACCTMQI(ON) ACCTQ(ON)
@@ -60,7 +60,7 @@ Sample metrics
 | ibmmq_channel_status_squash                               | Simplified: 0=stopped, 1=transition, 2=running |
 | ibmmq_channel_bytes_sent                                  | Channel throughput                             |
 
-<!-- Native HA specific metrics
+### Native HA specific metrics
 
 |               Prometheus Metric               |             Maps to MQ metric             |
 |:---------------------------------------------:|:-----------------------------------------:|
@@ -68,7 +68,8 @@ Sample metrics
 | ibmmq_nha_quorum                              | NativeHA quorum count                     |
 | ibmmq_nha_backlog_bytes                       | How far behind a replica is               |
 | ibmmq_nha_synchronous_log_sent_bytes_in_doubt | Log bytes not yet acknowledged by replica |
-| ibmmq_nha_synchronous_log_sent_bytes          | Log bytes replicated synchronously        | -->
+| ibmmq_nha_synchronous_log_sent_bytes          | Log bytes replicated synchronously        |
+| ibmmq_nha_replication_backlog_bytes           | Bytes pending replication to replica      |
 
 ### Native HA behaviour — metrics on Active node only
 
@@ -132,37 +133,66 @@ Prometheus started:
 
   ![](images/promql-put-tps.png)
   
-  - GET tps in last 5 minutes by Queue Manager  
-  ```
-  sum(rate(ibmmq_qmgr_destructive_get_total[5m])) by (qmgr)
-  ```
+  - GET tps in last 5 minutes by Queue Manager
 
   ![](images/promql-get-tps.png)
-
-  - Check replicaition backlog
-    
-  ```
-  ibmmq_nha_replication_backlog_bytes  
-  ```  
 
   - Show active node on Queue Manager QM1
   
   ```
   topk(1, count by (job) (ibmmq_nha_replication_backlog_bytes{qmgr="QM1"}))
   ```
-    <!-- Stop mq-node-3 and continuously put messages -->
+
+  ![](images/promql-active-node.png)
+
+  - Trend of replication backlog
+  Notice that previous example shows active node is mq-node-3, so replication is to node-1 and node-2
+  ```
+  avg_over_time(ibmmq_nha_replication_backlog_bytes{qmgr="QM1"}[5m])
+  ```
+
+  ![](images/promql-avg-over-time-replication-backlog.png)
+
+  - Custom [python script](obs-app/etc/mq-nha-prom.py) to write a guage to show quorum and active node
   
-  <!-- ![](images/promql-backlog.png)
-<!-- ### Grafana -->
-- Start Prometheus container with [start-prometheus.sh](obs-app/etc/start-grafana.sh)
+   Following example show active node is mq-node-2 and mq-node-3 is down
+  
+  ```
+  # HELP ibmmq_nha_quorum_insync Number of in-sync instances
+  # TYPE ibmmq_nha_quorum_insync gauge
+  ibmmq_nha_quorum_insync{qmgr="QM1"} 2
+  # HELP ibmmq_nha_quorum_total Number of configured instances
+  # TYPE ibmmq_nha_quorum_total gauge
+  ibmmq_nha_quorum_total{qmgr="QM1"} 3
+  # HELP ibmmq_nha_instance_role State-as-label for instance role
+  # TYPE ibmmq_nha_instance_role gauge
+  ibmmq_nha_instance_role{qmgr="QM1",instance="node-1",role="Replica"} 1
+  ibmmq_nha_instance_role{qmgr="QM1",instance="node-2",role="Active"} 1
+  ibmmq_nha_instance_role{qmgr="QM1",instance="node-3",role="Replica"} 1
+  # HELP ibmmq_nha_instance_connected Connection active flag (1=yes,0=no)
+  # TYPE ibmmq_nha_instance_connected gauge
+  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-1"} 1
+  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-2"} 1
+  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-3"} 0
+  # HELP ibmmq_nha_instance_insync In-sync flag (1=yes,0=no)
+  # TYPE ibmmq_nha_instance_insync gauge
+  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-1"} 1
+  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-2"} 1
+  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-3"} 0
+  ```
+   
+
+### Grafana
+- Start Grafana container with [start-grafana.sh](obs-app/etc/start-grafana.sh)
 ```bash
+cd obs-app/etc
 ./start-grafana.sh
 ```
 Output
 ```bash
 Grafana started:
   UI       → http://localhost:3000
-  Login    → admin / admin
+  Login    → admin / admin (demo default — change after first login)
 
 To import the Quarkus dashboard:
   1. Open http://localhost:3000
@@ -171,8 +201,9 @@ To import the Quarkus dashboard:
 ```
 - Add Prometheus datasource
   - Open [Grafana Dashboard](http://localhost:3000/)
-  - Grafana already configured with default data source to http://host.containers.internal:9090
-  - Click Sign-In and sign-in with user admin password admin -->
+  - Grafana already configured with default data source to `http://host.containers.internal:9090`
+  - Sign in with user `admin` / password `admin` (demo default — change after first login)
+
 ## OpenTelemetry
 
 ### all-in-one-app with OTEL enabled at runtime
@@ -254,15 +285,17 @@ Jaeger listens on:
 | 14268 | HTTP      | Jaeger native span ingestion   |
 | 14250 | gRPC      | Jaeger native model ingestion  |
 
-<!-- Run all-in-one with otel enabled app
+### Running the pre-built container with OTEL
+
+A pre-built container image is available at `quay.io/voravitl/simple-mq-app:otel` (public, no auth required):
 
 ```bash
 podman run -p 8080:8080 \
---network mq-ha-net \
--e IBM_MQ_CONNECTION_LIST="mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)" \
--e QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317" \
-quay.io/voravitl/simple-mq-app:otel
-``` -->
+  --network mq-ha-net \
+  -e IBM_MQ_CONNECTION_LIST="mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)" \
+  -e QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317" \
+  quay.io/voravitl/simple-mq-app:otel
+```
 
 Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **all-in-one**, and click **Find Traces** to view distributed traces.
 

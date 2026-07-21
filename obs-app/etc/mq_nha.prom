@@ -1,0 +1,21 @@
+# HELP ibmmq_nha_quorum_insync Number of in-sync instances
+# TYPE ibmmq_nha_quorum_insync gauge
+ibmmq_nha_quorum_insync{qmgr="QM1"} 2
+# HELP ibmmq_nha_quorum_total Number of configured instances
+# TYPE ibmmq_nha_quorum_total gauge
+ibmmq_nha_quorum_total{qmgr="QM1"} 3
+# HELP ibmmq_nha_instance_role State-as-label for instance role
+# TYPE ibmmq_nha_instance_role gauge
+ibmmq_nha_instance_role{qmgr="QM1",instance="node-1",role="Replica"} 1
+ibmmq_nha_instance_role{qmgr="QM1",instance="node-2",role="Active"} 1
+ibmmq_nha_instance_role{qmgr="QM1",instance="node-3",role="Replica"} 1
+# HELP ibmmq_nha_instance_connected Connection active flag (1=yes,0=no)
+# TYPE ibmmq_nha_instance_connected gauge
+ibmmq_nha_instance_connected{qmgr="QM1",instance="node-1"} 1
+ibmmq_nha_instance_connected{qmgr="QM1",instance="node-2"} 1
+ibmmq_nha_instance_connected{qmgr="QM1",instance="node-3"} 0
+# HELP ibmmq_nha_instance_insync In-sync flag (1=yes,0=no)
+# TYPE ibmmq_nha_instance_insync gauge
+ibmmq_nha_instance_insync{qmgr="QM1",instance="node-1"} 1
+ibmmq_nha_instance_insync{qmgr="QM1",instance="node-2"} 1
+ibmmq_nha_instance_insync{qmgr="QM1",instance="node-3"} 0
