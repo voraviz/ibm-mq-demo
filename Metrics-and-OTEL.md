@@ -290,14 +290,36 @@ Jaeger listens on:
 A pre-built container image is available at `quay.io/voravitl/simple-mq-app:otel` (public, no auth required):
 
 ```bash
-podman run -p 8080:8080 \
-  --network mq-ha-net \
-  -e IBM_MQ_CONNECTION_LIST="mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)" \
-  -e QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317" \
+podman run --name="all-in-one" -p 8080:8080 \
+  -v ./config/application.otel.properties:/config/application.properties \
+  -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
   quay.io/voravitl/simple-mq-app:otel
 ```
 
-Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **all-in-one**, and click **Find Traces** to view distributed traces.
+Put message via API
+
+```bash
+curl -X POST \
+http://localhost:8080/api/messages  \
+-H "Content-Type: application/json" \
+ -d '{"text":"Jack Johnson"}'
+```
+
+Loop for 20 messages
+
+```bash
+COUNT=0
+while [ $COUNT -lt 20 ];
+do
+curl -X POST \
+http://localhost:8080/api/messages  -H "Content-Type: application/json" -d '{"text":"Jack Johnson"}';
+NUMBER=$(( RANDOM % 10 + 1 ))
+sleep $NUMBER
+COUNT=$(expr $COUNT + 1 )
+done
+```
+
+Once the `all-in-one-app` is running and receiving traffic, open the [Jaeger UI](http://localhost:16686), select service **mq-api**, and click **Find Traces** to view distributed traces.
 
 Jaeger - all-in-one app
 
