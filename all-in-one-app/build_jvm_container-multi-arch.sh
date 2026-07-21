@@ -4,20 +4,20 @@ PLATFORM=linux/amd64,linux/arm64
 TAG=latest
 DOCKERFILE=jvm
 IMAGE=$CONTAINER_NAME:$TAG
-podman manifest exists $IMAGE 
-if [ $? -eq 0 ];
-then
- podman manifest rm $IMAGE
-fi
-podman manifest create $IMAGE 
-echo "Build with Dockerfile.$DOCKERFILE tag $TAG"
-mvn clean package -DskipTests=true
 CONTAINER_RUNTIME=podman
 podman --version 1>/dev/null 2>&1
 if [ $? -ne 0 ];
 then
    CONTAINER_RUNTIME=docker 
 fi
+$CONTAINER_RUNTIME manifest exists $IMAGE 
+if [ $? -eq 0 ];
+then
+ $CONTAINER_RUNTIME manifest rm $IMAGE
+fi
+$CONTAINER_RUNTIME manifest create $IMAGE 
+echo "Build with Dockerfile.$DOCKERFILE tag $TAG"
+mvn clean package -DskipTests=true
 $CONTAINER_RUNTIME build --platform $PLATFORM  --manifest \
 $IMAGE -f src/main/docker/Dockerfile.$DOCKERFILE  .
 $CONTAINER_RUNTIME manifest push $IMAGE
