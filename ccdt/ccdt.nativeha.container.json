@@ -4,9 +4,9 @@
       "name": "DEV.APP.SVRCONN",
       "clientConnection": {
         "connection": [
-          {"host": "host.containers.internal", "port": 1414},
-          {"host": "host.containers.internal", "port": 1415},
-          {"host": "host.containers.internal", "port": 1416}
+          {"host": "mq-node-1", "port": 1414},
+          {"host": "mq-node-2", "port": 1414},
+          {"host": "mq-node-3", "port": 1414}
         ],
         "queueManager": "QM1" 
       },
