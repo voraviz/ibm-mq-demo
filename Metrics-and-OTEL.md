@@ -290,19 +290,21 @@ Jaeger listens on:
 A pre-built container image is available at `quay.io/voravitl/simple-mq-app:otel` (public, no auth required):
 
 ```bash
-podman run --name="all-in-one" -p 8080:8080 \
+podman run --detach --name="all-in-one" -p 8080:8080 \
   -v ./config/application.otel.properties:/config/application.properties \
   -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
   quay.io/voravitl/simple-mq-app:otel
 ```
 
-Put message via API
+Start consumer and put message via API
 
 ```bash
 curl -X POST \
+http://localhost:8080/consumer/start
+curl -X POST \
 http://localhost:8080/api/messages  \
 -H "Content-Type: application/json" \
- -d '{"text":"Jack Johnson"}'
+ -d '{"text":"BIBIBBI"}'
 ```
 
 Loop for 20 messages
@@ -312,7 +314,8 @@ COUNT=0
 while [ $COUNT -lt 20 ];
 do
 curl -X POST \
-http://localhost:8080/api/messages  -H "Content-Type: application/json" -d '{"text":"Jack Johnson"}';
+http://localhost:8080/api/messages  -H "Content-Type: application/json" \
+ -d '{"text":"BIBIBBI... Yellow C-A-R-D oh-oh"}'
 NUMBER=$(( RANDOM % 10 + 1 ))
 sleep $NUMBER
 COUNT=$(expr $COUNT + 1 )
