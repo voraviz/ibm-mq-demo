@@ -471,10 +471,10 @@ the MQ ports published on the host:
 
 ```bash
 podman run --detach --name="all-in-one" -p 8080:8080 \
+  --network mq-ha-net \
+  -v ./config/application.properties:/config/application.properties \
   -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
-  -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
-  -e IBM_MQ_QUEUE_MANAGER="QM1" \
-  -e IBM_MQ_APPLICATION_NAME="all-in-one" \
+  -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
   quay.io/voravitl/simple-mq-app:latest
 ```
 
