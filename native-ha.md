@@ -470,7 +470,7 @@ it targets `QM1` across the three nodes using `host.containers.internal`, so the
 the MQ ports published on the host:
 
 ```bash
-podman run -p 8080:8080 \
+podman run --detach --name="all-in-one" -p 8080:8080 \
   -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
   -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
   -e IBM_MQ_QUEUE_MANAGER="QM1" \
