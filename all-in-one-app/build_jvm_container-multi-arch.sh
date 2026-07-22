@@ -2,7 +2,7 @@
 CONTAINER_NAME=quay.io/voravitl/simple-mq-app
 PLATFORM=linux/amd64,linux/arm64
 TAG=latest #otel,latest
-DOCKERFILE=jvm #jvm,hummingbird
+DOCKERFILE=jvm-runtime #jvm,jvm-runtime,hummingbird
 IMAGE=$CONTAINER_NAME:$TAG
 CONTAINER_RUNTIME=podman
 podman --version 1>/dev/null 2>&1
