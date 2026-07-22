@@ -1,7 +1,7 @@
 #!/bin/sh
 CONTAINER_NAME=quay.io/voravitl/simple-mq-app
 PLATFORM=linux/amd64,linux/arm64
-TAG=latest #otel,latest
+TAG=multi-arch #otel,latest,hi
 DOCKERFILE=jvm-runtime #jvm,jvm-runtime,hummingbird
 IMAGE=$CONTAINER_NAME:$TAG
 CONTAINER_RUNTIME=podman
