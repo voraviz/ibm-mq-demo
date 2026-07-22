@@ -15,7 +15,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.37.3</quarkus.platform.version>
+    <quarkus.platform.version>3.37.1</quarkus.platform.version>
     <ibm.mq.version>9.4.3.0</ibm.mq.version>
     <node.version>v20.19.1</node.version>
     <npm.version>10.8.2</npm.version>
@@ -83,16 +83,16 @@
     </dependency>
 
     <!-- OpenTelemetry -->
-    <dependency>
+    <!-- <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-opentelemetry</artifactId>
-    </dependency>
+    </dependency> -->
 
-    <!-- Micrometer OTLP registry -->
+    <!-- Micrometer OTLP registry 
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-micrometer-opentelemetry</artifactId>
-    </dependency>
+    </dependency>-->
 
     <!-- CDI -->
     <dependency>
@@ -123,10 +123,14 @@
         <extensions>true</extensions>
         <executions>
           <execution>
+            <!-- Only `build`. The generate-code/-tests goals (generate-sources phase)
+                 snapshot the app's resources before the Vue build is copied into
+                 target/classes, dropping META-INF/resources from the fast-jar -> UI
+                 404s in the container. This project has no codegen (gRPC/Avro/proto),
+                 so they aren't needed. Re-add them if you add a codegen extension,
+                 but then build the UI before generate-sources. -->
             <goals>
               <goal>build</goal>
-              <goal>generate-code</goal>
-              <goal>generate-code-tests</goal>
             </goals>
           </execution>
         </executions>
@@ -156,21 +160,22 @@
           <npmVersion>${npm.version}</npmVersion>
         </configuration>
         <executions>
+          <!-- Build the UI early so it's in target/classes before packaging. -->
           <execution>
             <id>install-node-and-npm</id>
             <goals><goal>install-node-and-npm</goal></goals>
-            <phase>generate-resources</phase>
+            <phase>initialize</phase>
           </execution>
           <execution>
             <id>npm-install</id>
             <goals><goal>npm</goal></goals>
-            <phase>generate-resources</phase>
+            <phase>initialize</phase>
             <configuration><arguments>install</arguments></configuration>
           </execution>
           <execution>
             <id>npm-build</id>
             <goals><goal>npm</goal></goals>
-            <phase>generate-resources</phase>
+            <phase>initialize</phase>
             <configuration><arguments>run build</arguments></configuration>
           </execution>
         </executions>
