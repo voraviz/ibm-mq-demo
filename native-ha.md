@@ -783,6 +783,63 @@ Open [http://localhost:8080](http://localhost:8080) in a browser.
 > npm run dev
 > ```
 
+**Run both as containers via podman**
+
+Summary for running `api-app-go` + `ui-app` as containers against the local
+Native HA group on `localhost(1414)`, `localhost(1415)`, `localhost(1416)`.
+
+> Both images are **linux/amd64** (IBM ships the MQ C client for LinuxX64 only)
+> and segfault under QEMU — run on a native amd64 host, not Apple Silicon.
+>
+> Inside a container `localhost` is the *container*, not your host. So the API
+> reaches MQ via podman's `host.containers.internal` alias, while the browser
+> reaches the API via the published `localhost:8081`.
+
+**1. api-app-go** — MQ connection settings are read from environment variables:
+
+```bash
+podman run -d --name api-app-go -p 8081:8081 \
+  -e IBM_MQ_CONNECTION_LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
+  -e IBM_MQ_CHANNEL=DEV.APP.SVRCONN \
+  -e IBM_MQ_QUEUE_MANAGER=QM1 \
+  -e IBM_MQ_QUEUE=DEV.DEMO.QL.IN \
+  -e IBM_MQ_USERNAME=app \
+  -e IBM_MQ_PASSWORD=passw0rd \
+  quay.io/voravitl/simple-mq-api-go:latest
+
+curl http://localhost:8081/api/status   # verify
+```
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `IBM_MQ_CONNECTION_LIST` | `localhost(1414),localhost(1415),localhost(1416)` | Use `host.containers.internal(...)` from a container |
+| `IBM_MQ_CHANNEL` | `DEV.APP.SVRCONN` | |
+| `IBM_MQ_QUEUE_MANAGER` | `QM1` | |
+| `IBM_MQ_QUEUE` | `DEV.DEMO.QL.IN` | |
+| `IBM_MQ_USERNAME` / `IBM_MQ_PASSWORD` | `app` / `passw0rd` | |
+| `IBM_MQ_CCDT_URL` | *(unset)* | if set, overrides connection list + channel |
+| `SERVER_PORT` | `8081` | |
+
+**2. ui-app** — nginx serves the SPA and reverse-proxies `/api` and `/ws` to the
+backend. The backend URL is a **runtime** env var (`API_UPSTREAM`), so the image
+is built once (with an empty `VITE_API_BASE_URL`, i.e. same-origin) and pointed
+at any API at `podman run`:
+
+```bash
+cd ui-app
+: > .env                  # empty VITE_API_BASE_URL — browser calls same-origin /api + /ws
+./build_container.sh      # npm build on host, then builds the amd64 image
+
+podman run -d --name ui-app -p 8080:8080 \
+  -e API_UPSTREAM=http://host.containers.internal:8081 \
+  quay.io/voravitl/simple-mq-ui:latest
+```
+
+Open [http://localhost:8080](http://localhost:8080). The browser talks only to
+the UI on 8080; nginx proxies `/api` and `/ws/messages` to `API_UPSTREAM`
+(defaults to `http://localhost:8081` if unset). Because everything is
+same-origin, there's no CORS to configure.
+
 ### Golang JMS REST API
 
 [`api-app-go-jms20`](api-app-go-jms20) is a Go REST API that uses the higher-level
