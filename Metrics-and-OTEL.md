@@ -9,19 +9,19 @@
                │
                │  (via host.containers.internal — exits mq-ha-net to host)
                ▼
-  ┌─────────────────────────────── mq-ha-net (podman network) ──────────────────────────────┐
-  │                                                                                         │
-  │   ┌─────────────────┐   scrape :9157      ┌──────────────────────────────────────────┐  │
-  │   │                 │ ──────────────────► │  mq-node-1  :9157  (Active QM1) ✅ up    │  │
-  │   │   Prometheus    │ - - - - - - - - - ► │  mq-node-2  :9157  (Replica)    ❌ down  │  │
-  │   │   :9090         │ - - - - - - - - - ► │  mq-node-3  :9157  (Replica)    ❌ down  │  │
-  │   │                 │ ──────────────────► │  mq-node-4  :9157  (Active QM2) ✅ up    │  │
-  │   │                 │ - - - - - - - - - ► │  mq-node-5  :9157  (Replica)    ❌ down  │  │
-  │   │                 │ - - - - - - - - - ► │  mq-node-6  :9157  (Replica)    ❌ down  │  │
-  │   │                 │                     └──────────────────────────────────────────┘  │
-  │   └────────┬────────┘                                                                   │
-  │            │ scrape host.containers.internal:8080 /q/metrics                            │
-  └────────────┼────────────────────────────────────────────────────────────────────────────┘
+  ┌───────────────────────────────── mq-ha-net (podman network) ───────────────────────────────┐
+  │                                                                                            │
+  │   ┌─────────────────┐  scrape :9157   ┌──────────────────────────────────────────────────┐ │
+  │   │                 │ ──────────────► │  mq-node-1  :9157  (Active QM1)          ✅ up    │ │
+  │   │                 │ - - - - - - - ► │  mq-node-2  :9157  (Replica)             ❌ down  │ │
+  │   │                 │ - - - - - - - ► │  mq-node-3  :9157  (Replica)             ❌ down  │ │
+  │   │   Prometheus    │                 └──────────────────────────────────────────────────┘  │
+  │   │   :9090         │  scrape :9157   ┌──────────────────────────────────────────────────┐  │
+  │   │                 │ ──────────────► │  mq-exporter :9157 (per-queue depth)     ✅ up   │  │
+  │   │                 │                 │  MQ client → follows the Active node             │  │
+  │   └────────┬────────┘                 └──────────────────────────────────────────────────┘  │
+  │            │ scrape host.containers.internal:8080 /q/metrics                                │
+  └────────────┼────────────────────────────────────────────────────────────────────────────────┘
                │
                │  (via host.containers.internal — exits mq-ha-net to host)
                ▼
@@ -49,27 +49,33 @@ Sample metrics
 |                     Prometheus Metric                     |                Maps to MQ metric               |
 |:---------------------------------------------------------:|:----------------------------------------------:|
 | ibmmq_qmgr_cpu_load_fifteen_minute_average_percentage     | CPU 15-min avg %                               |
-| ibmmq_qmgr_ram_total_estimate_for_queue_manager_megabytes | RAM used by QM                                 |
-| ibmmq_qmgr_log_write_latency_microseconds                 | Log write latency                              |
-| ibmmq_qmgr_log_occupancy_percentage                       | Log disk % used                                |
+| ibmmq_qmgr_ram_usage_estimate_for_queue_manager_bytes     | RAM used by QM (bytes)                         |
+| ibmmq_qmgr_log_write_latency_seconds                      | Log write latency                              |
+| ibmmq_qmgr_log_primary_space_in_use_percentage            | Log primary space % used                       |
 | ibmmq_queue_depth                                         | Current queue depth                            |
-| ibmmq_queue_time_longest_unit_of_work_microseconds        | Oldest msg age                                 |
-| ibmmq_queue_mqput_mqput1_count                            | PUT rate                                       |
-| ibmmq_queue_destructive_mqget_count                       | GET rate                                       |
+| ibmmq_queue_oldest_message_age                            | Oldest msg age                                 |
+| ibmmq_queue_mqput_mqput1_total                            | PUT count                                      |
+| ibmmq_queue_destructive_mqget_total                       | GET count                                      |
 | ibmmq_channel_status                                      | Channel state (MQCHS_* values)                 |
 | ibmmq_channel_status_squash                               | Simplified: 0=stopped, 1=transition, 2=running |
 | ibmmq_channel_bytes_sent                                  | Channel throughput                             |
 
 ### Native HA specific metrics
 
-|               Prometheus Metric               |             Maps to MQ metric             |
-|:---------------------------------------------:|:-----------------------------------------:|
-| ibmmq_nha_role                                | NativeHA active/replica status            |
-| ibmmq_nha_quorum                              | NativeHA quorum count                     |
-| ibmmq_nha_backlog_bytes                       | How far behind a replica is               |
-| ibmmq_nha_synchronous_log_sent_bytes_in_doubt | Log bytes not yet acknowledged by replica |
-| ibmmq_nha_synchronous_log_sent_bytes          | Log bytes replicated synchronously        |
-| ibmmq_nha_replication_backlog_bytes           | Bytes pending replication to replica      |
+|                        Prometheus Metric                        |            Maps to MQ metric            |
+|:---------------------------------------------------------------:|:---------------------------------------:|
+| ibmmq_nha_replication_backlog_bytes                             | Bytes pending replication to a replica  |
+| ibmmq_nha_replication_backlog_average_bytes                     | Rolling-average replication backlog     |
+| ibmmq_nha_replication_synchronous_log_sent_bytes                | Log bytes replicated synchronously      |
+| ibmmq_nha_replication_average_network_round_trip_time_seconds   | Replication network round-trip time     |
+| ibmmq_nha_replication_log_write_average_acknowledgement_latency_seconds | Replica log-write acknowledgement latency |
+| ibmmq_nha_replication_queue_manager_file_system_free_space_percent | QM data filesystem free %             |
+
+> **No direct role/quorum metric.** Native HA does **not** expose an
+> `ibmmq_nha_role` or `ibmmq_nha_quorum` series. Identify the Active node from
+> which node reports `ibmmq_nha_replication_*` (only the Active does) — see the
+> `topk`/`count by (job)` PromQL below — or generate custom gauges from
+> `dspmq -o nativeha` with [`mq-nha-prom.py`](obs-app/etc/mq-nha-prom.py).
 
 ### Native HA behaviour — metrics on Active node only
 
@@ -80,9 +86,6 @@ IBM MQ's web server (and therefore the Prometheus `/metrics` endpoint on port 91
 | `mq-node-1` | Active (QM1) | ✅ open | `up` |
 | `mq-node-2` | Replica | ❌ closed | `down` — connection refused |
 | `mq-node-3` | Replica | ❌ closed | `down` — connection refused |
-| `mq-node-4` | Active (QM2) | ✅ open | `up` |
-| `mq-node-5` | Replica | ❌ closed | `down` — connection refused |
-| `mq-node-6` | Replica | ❌ closed | `down` — connection refused |
 
 This is **expected and correct**. After a failover, whichever node is elected Active starts the web server and Prometheus automatically begins scraping it on the next `scrape_interval` (15 s). No configuration change is needed.
 
@@ -97,12 +100,6 @@ This is **expected and correct**. After a failover, whichever node is elected Ac
 >         for: 30s
 >         annotations:
 >           summary: "All QM1 HA nodes are unreachable — possible full HA-GROUP-1 outage"
->
->       - alert: MQGroup2AllNodesDown
->         expr: count(up{job=~"mq-node-[456]"} == 1) == 0
->         for: 30s
->         annotations:
->           summary: "All QM2 HA nodes are unreachable — possible full HA-GROUP-2 outage"
 > ```
 
 ## Per-queue metrics — mq-metric-samples exporter
@@ -194,34 +191,25 @@ Prometheus started:
 
   ![](images/promql-avg-over-time-replication-backlog.png)
 
-  - Custom [python script](obs-app/etc/mq-nha-prom.py) to write a guage to show quorum and active node
-  
-   Following example show active node is mq-node-2 and mq-node-3 is down
+  - Monitor number of messages in Queue
+  ```
+  ibmmq_queue_depth{queue="DEV.DEMO.QL.IN"}
+  ```
+  ![](images/promql-queue-depth.png)
+
+  - Per-queue % used, labelled by queue name only (drops noisy labels)
   
   ```
-  # HELP ibmmq_nha_quorum_insync Number of in-sync instances
-  # TYPE ibmmq_nha_quorum_insync gauge
-  ibmmq_nha_quorum_insync{qmgr="QM1"} 2
-  # HELP ibmmq_nha_quorum_total Number of configured instances
-  # TYPE ibmmq_nha_quorum_total gauge
-  ibmmq_nha_quorum_total{qmgr="QM1"} 3
-  # HELP ibmmq_nha_instance_role State-as-label for instance role
-  # TYPE ibmmq_nha_instance_role gauge
-  ibmmq_nha_instance_role{qmgr="QM1",instance="node-1",role="Replica"} 1
-  ibmmq_nha_instance_role{qmgr="QM1",instance="node-2",role="Active"} 1
-  ibmmq_nha_instance_role{qmgr="QM1",instance="node-3",role="Replica"} 1
-  # HELP ibmmq_nha_instance_connected Connection active flag (1=yes,0=no)
-  # TYPE ibmmq_nha_instance_connected gauge
-  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-1"} 1
-  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-2"} 1
-  ibmmq_nha_instance_connected{qmgr="QM1",instance="node-3"} 0
-  # HELP ibmmq_nha_instance_insync In-sync flag (1=yes,0=no)
-  # TYPE ibmmq_nha_instance_insync gauge
-  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-1"} 1
-  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-2"} 1
-  ibmmq_nha_instance_insync{qmgr="QM1",instance="node-3"} 0
+  100 * ibmmq_queue_depth
+    / on(qmgr,queue) ibmmq_queue_attribute_max_depth
   ```
-   
+
+  ![](images/promql-percent-used-queue.png)
+
+  - Custom gauges for quorum + active-node role (not exposed as native metrics)
+    are generated by [`mq-nha-prom.py`](obs-app/etc/mq-nha-prom.py) from
+    `dspmq -o nativeha`, written as a node_exporter textfile collector.
+
 
 ### Grafana
 - Start Grafana container with [start-grafana.sh](obs-app/etc/start-grafana.sh)
