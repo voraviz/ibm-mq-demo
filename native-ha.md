@@ -18,7 +18,10 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
     - [Connection List vs CCDT](#connection-list-vs-ccdt)
     - [The demo applications](#the-demo-applications)
       - [All-in-one Java Application](#all-in-one-java-application)
-      - [Golang REST API — api-app-go \& api-app-go-jms20](#golang-rest-api--api-app-go--api-app-go-jms20)
+        - [Option A — Connection list (default)](#option-a--connection-list-default)
+        - [Option B — CCDT](#option-b--ccdt)
+        - [OpenAPI and Swagger UI](#openapi-and-swagger-ui)
+      - [Golang REST API — `api-app-go` \& `api-app-go-jms20`](#golang-rest-api--api-app-go--api-app-go-jms20)
       - [UI app](#ui-app)
     - [Run apps as containers (Podman)](#run-apps-as-containers-podman)
       - [All-in-one app](#all-in-one-app)
@@ -611,7 +614,6 @@ the MQ ports published on the host:
 podman run --detach --name="all-in-one" -p 8080:8080 \
   --network mq-ha-net \
   -v ./config/application.properties:/config/application.properties \
-  -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
   -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
   quay.io/voravitl/simple-mq-app:latest
 ```
