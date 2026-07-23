@@ -17,12 +17,24 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
   - [Test Applications](#test-applications)
     - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
     - [All-in-one Java Application](#all-in-one-java-application)
-    - [Batch test with helper scripts](#batch-test-with-helper-scripts)
+      - [Option A — Connection list (default)](#option-a--connection-list-default)
+      - [Option B — CCDT](#option-b--ccdt)
+      - [Build and run](#build-and-run)
+      - [OpenAPI and Swagger UI](#openapi-and-swagger-ui)
+      - [Implementation Notes](#implementation-notes)
     - [Golang REST API](#golang-rest-api)
     - [Golang JMS REST API](#golang-jms-rest-api)
+    - [UI app (`ui-app`)](#ui-app-ui-app)
+    - [Run apps as containers (Podman)](#run-apps-as-containers-podman)
+      - [All-in-one app](#all-in-one-app)
+      - [Go API](#go-api)
+      - [UI app](#ui-app)
+    - [Batch test with helper scripts](#batch-test-with-helper-scripts)
+      - [Container batch test (all-in-one)](#container-batch-test-all-in-one)
+      - [Native process batch test (Go)](#native-process-batch-test-go)
   - [Reconnect behaviour: producer vs consumer](#reconnect-behaviour-producer-vs-consumer)
-    - [Consumer (both apps — near-mirror images)](#consumer-both-apps--near-mirror-images)
-    - [Producer (the apps differ by design)](#producer-the-apps-differ-by-design)
+    - [Consumer](#consumer)
+    - [Producer](#producer)
   - [Failover Test](#failover-test)
 
 ---
@@ -379,7 +391,9 @@ Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
 
 The app supports two connection modes — **connection list** (default) and **CCDT**. The mode is selected at startup based on whether `ibm.mq.ccdt-url` is set. If it is present and non-blank, CCDT is used; otherwise the connection list and channel are used.
 
-**Option A — Connection list (default)** — [`application.properties`](all-in-one-app/src/main/resources/application.properties):
+#### Option A — Connection list (default)
+
+[`application.properties`](all-in-one-app/src/main/resources/application.properties):
 
 ```properties
 # ibm.mq.ccdt-url is commented out — connection list is active
@@ -388,7 +402,9 @@ ibm.mq.channel=DEV.APP.SVRCONN
 ibm.mq.queue-manager=QM1
 ```
 
-**Option B — CCDT** — uncomment `ibm.mq.ccdt-url` and comment out `connection-list` and `channel`:
+#### Option B — CCDT
+
+uncomment `ibm.mq.ccdt-url` and comment out `connection-list` and `channel`:
 
 ```properties
 ibm.mq.ccdt-url=file:ccdt/ccdt.nativeha.json
@@ -441,7 +457,7 @@ public class MQConnectionFactoryProducer {
 }
 ```
 
-**Build and run:**
+#### Build and run
 
 ```bash
 # Build
@@ -450,59 +466,15 @@ cd all-in-one-app
 
 # Run from JAR
 java -jar target/quarkus-app/quarkus-run.jar
-
-# Or run from container (host.containers.internal resolves to the host machine)
-podman run -p 8080:8080 \
-  -e IBM.MQ.CONNECTION-LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
-  quay.io/voravitl/simple-mq-app:latest
 ```
 
 Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
 
 ![Application connected to mq-node-2](images/mq-app.png)
 
-**Test with the prebuilt container image**
+> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
 
-You can skip the local build and test the `all-in-one-app` straight from the published image
-[`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app). Mount the
-Native HA container CCDT [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json) —
-it targets `QM1` across the three nodes using `host.containers.internal`, so the container can reach
-the MQ ports published on the host:
-
-```bash
-podman run --detach --name="all-in-one" -p 8080:8080 \
-  --network mq-ha-net \
-  -v ./config/application.properties:/config/application.properties \
-  -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
-  -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
-  quay.io/voravitl/simple-mq-app:latest
-```
-
-Open [http://localhost:8080](http://localhost:8080) — the top menu bar shows which node the app is
-connected to, exactly as with the locally built version.
-
-### Batch test with helper scripts
-
-Two helper scripts at the repository root drive a multi-instance put/consume test end to end:
-
-| Script | Purpose |
-|--------|---------|
-| [`start-all-in-one-apps-container.sh`](start-all-in-one-apps-container.sh) | Starts several `all-in-one-app` containers (host ports `9190`+). For each instance it then sends 10 messages to `POST /api/messages` and starts the consumer via `POST /api/consumer/start`. |
-| [`clear-all-in-one-apps-container.sh`](clear-all-in-one-apps-container.sh) | Stops and force-removes every running `all-in-one-*` container. |
-
-```bash
-./start-all-in-one-apps-container.sh   # start the instances + run the put/consume test
-./clear-all-in-one-apps-container.sh   # tear everything down
-```
-
-> **Note:** `start-all-in-one-apps-container.sh` ships preconfigured for the
-> [Uniform Cluster](native-ha-with-uniform-cluster.md) — `IBM_MQ_QUEUE_MANAGER=*UNIQA` with
-> [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json). For this plain Native HA
-> setup, edit it to use `IBM_MQ_QUEUE_MANAGER=QM1` and mount
-> [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json), as in the single-container
-> command above.
-
-**OpenAPI & Swagger UI**
+#### OpenAPI and Swagger UI
 
 The REST API is fully documented with OpenAPI 3. Once the application is running:
 You can access swagger-ui at /q/swagger-ui
@@ -525,32 +497,7 @@ Swagger-UI
 
 ![swagger UI](images/swagger-ui.png)
 
-**Check APP status**
-- Run runmqsc at active node
-```bash
-podman exec mq-node-1 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
-```
-Output
-```bash
-1 : DISPLAY APSTATUS(*)
-AMQ8932I: Display application status details.
-   APPLNAME(all-in-one)                    CLUSTER( )
-   COUNT(1)                                MOVCOUNT(0)
-   BALANCED(NOTAPPLIC)
-```
-
-**Application Log**
-- Use Connection List
-```log
-2026-07-12 10:19:08,192 INFO  [com.example.config.MQConnectionFactoryProducer] (Quarkus Main Thread) Use Connection List: localhost(1414),localhost(1415),localhost(1416)
-```
-- Connect to QM1 
-```log
-2026-07-12 10:19:55,047 DEBUG [com.example.resource.InfoResource] (executor-thread-1) Requesting MQ info — configured queueManager: QM1
-2026-07-12 10:19:55,093 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ connection established successfully
-2026-07-12 10:19:55,094 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ Server Host: localhost/127.0.0.1 (1414), resolvedQueueManager: QM1
-2026-07-12 10:19:55,112 DEBUG [com.example.resource.InfoResource] (executor-thread-1) InfoResponse: connected=true, queueManager=QM1, host=localhost/127.0.0.1, port=1414
-```
+#### Implementation Notes
 
 **Frontend resilience during failover — `sendOneWithRetry()`**
 
@@ -613,6 +560,8 @@ on the `@ApplicationScoped` CDI bean. The bean lives for the lifetime of the pro
 the counter is only reset if the JVM restarts. The MQ reconnect is fully transparent at
 the Java layer — only the TCP connection is re-established, the bean and its counter are
 untouched.
+
+---
 
 ### Golang REST API
 
@@ -763,82 +712,7 @@ Because `PUT /api/messages` returns `500` when the MQ connection fails, the
 `sendOneWithRetry()` loop in the Vue frontend catches it, waits 2 seconds, and retries
 the **same message**. The retry loop is identical regardless of which backend is used.
 
-**Run the UI (`ui-app`):**
-
-The Vue.js frontend is a separate Vite app. It proxies `/api` and `/ws` to `http://localhost:8081` automatically in dev mode, so no extra configuration is needed.
-
-```bash
-cd ui-app
-npm install        # first time only
-npm run dev
-```
-
-Open [http://localhost:8080](http://localhost:8080) in a browser.
-
-> To point the UI at a non-default API host, copy [`.env.example`](ui-app/.env.example) and set `VITE_API_BASE_URL`:
->
-> ```bash
-> cp ui-app/.env.example ui-app/.env
-> # edit .env and set VITE_API_BASE_URL=http://<api-host>:8081
-> npm run dev
-> ```
-
-**Run both as containers via podman**
-
-Summary for running `api-app-go` + `ui-app` as containers against the local
-Native HA group on `localhost(1414)`, `localhost(1415)`, `localhost(1416)`.
-
-> Both images are **linux/amd64** (IBM ships the MQ C client for LinuxX64 only)
-> and segfault under QEMU — run on a native amd64 host, not Apple Silicon.
->
-> Inside a container `localhost` is the *container*, not your host. So the API
-> reaches MQ via podman's `host.containers.internal` alias, while the browser
-> reaches the API via the published `localhost:8081`.
-
-**1. api-app-go** — MQ connection settings are read from environment variables:
-
-```bash
-podman run -d --name api-app-go -p 8081:8081 \
-  -e IBM_MQ_CONNECTION_LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
-  -e IBM_MQ_CHANNEL=DEV.APP.SVRCONN \
-  -e IBM_MQ_QUEUE_MANAGER=QM1 \
-  -e IBM_MQ_QUEUE=DEV.DEMO.QL.IN \
-  -e IBM_MQ_USERNAME=app \
-  -e IBM_MQ_PASSWORD=passw0rd \
-  quay.io/voravitl/simple-mq-api-go:latest
-
-curl http://localhost:8081/api/status   # verify
-```
-
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `IBM_MQ_CONNECTION_LIST` | `localhost(1414),localhost(1415),localhost(1416)` | Use `host.containers.internal(...)` from a container |
-| `IBM_MQ_CHANNEL` | `DEV.APP.SVRCONN` | |
-| `IBM_MQ_QUEUE_MANAGER` | `QM1` | |
-| `IBM_MQ_QUEUE` | `DEV.DEMO.QL.IN` | |
-| `IBM_MQ_USERNAME` / `IBM_MQ_PASSWORD` | `app` / `passw0rd` | |
-| `IBM_MQ_CCDT_URL` | *(unset)* | if set, overrides connection list + channel |
-| `SERVER_PORT` | `8081` | |
-
-**2. ui-app** — nginx serves the SPA and reverse-proxies `/api` and `/ws` to the
-backend. The backend URL is a **runtime** env var (`API_UPSTREAM`), so the image
-is built once (with an empty `VITE_API_BASE_URL`, i.e. same-origin) and pointed
-at any API at `podman run`:
-
-```bash
-cd ui-app
-: > .env                  # empty VITE_API_BASE_URL — browser calls same-origin /api + /ws
-./build_container.sh      # npm build on host, then builds the amd64 image
-
-podman run -d --name ui-app -p 8080:8080 \
-  -e API_UPSTREAM=http://host.containers.internal:8081 \
-  quay.io/voravitl/simple-mq-ui:latest
-```
-
-Open [http://localhost:8080](http://localhost:8080). The browser talks only to
-the UI on 8080; nginx proxies `/api` and `/ws/messages` to `API_UPSTREAM`
-(defaults to `http://localhost:8081` if unset). Because everything is
-same-origin, there's no CORS to configure.
+> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
 
 ### Golang JMS REST API
 
@@ -927,7 +801,176 @@ IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
 ./api-app-go-jms20
 ```
 
----
+> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
+
+### UI app (`ui-app`)
+
+The Vue.js frontend is a separate Vite app. It proxies `/api` and `/ws` to `http://localhost:8081` automatically in dev mode, so no extra configuration is needed.
+
+```bash
+cd ui-app
+npm install        # first time only
+npm run dev
+```
+
+Open [http://localhost:8080](http://localhost:8080) in a browser.
+
+> To point the UI at a non-default API host, copy [`.env.example`](ui-app/.env.example) and set `VITE_API_BASE_URL`:
+>
+> ```bash
+> cp ui-app/.env.example ui-app/.env
+> # edit .env and set VITE_API_BASE_URL=http://<api-host>:8081
+> npm run dev
+> ```
+
+> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
+
+### Run apps as containers (Podman)
+
+All three apps — **all-in-one**, **Go API** (`api-app-go` and `api-app-go-jms20`), and the **Vue.js UI** — have published container images. Run them with podman against the local Native HA group.
+
+> **Architecture note:** Both Go API images are **linux/amd64** (IBM ships the MQ C client for LinuxX64 only)
+> and segfault under QEMU — run on a native amd64 host, not Apple Silicon. Inside a container `localhost`
+> is the *container*, not your host — use `host.containers.internal` to reach MQ ports published on the host.
+
+#### All-in-one app
+
+You can skip the local build and test the `all-in-one-app` straight from the published image
+[`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app). Mount the
+Native HA container CCDT [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json) —
+it targets `QM1` across the three nodes using `host.containers.internal`, so the container can reach
+the MQ ports published on the host:
+
+```bash
+podman run --detach --name="all-in-one" -p 8080:8080 \
+  --network mq-ha-net \
+  -v ./config/application.properties:/config/application.properties \
+  -v ./ccdt/ccdt.nativeha.container.json:/config/ccdt.json:ro \
+  -e QUARKUS_CONFIG_LOCATIONS="file:///config/application.properties" \
+  quay.io/voravitl/simple-mq-app:latest
+```
+
+Open [http://localhost:8080](http://localhost:8080) — the top menu bar shows which node the app is
+connected to, exactly as with the locally built version.
+
+#### Go API
+
+To switch between the two Go API variants, use the corresponding image:
+
+| Variant | Image |
+|---------|-------|
+| `api-app-go` (raw MQI) | `quay.io/voravitl/simple-mq-api-go:latest` |
+| `api-app-go-jms20` (JMS20) | `quay.io/voravitl/simple-mq-api-go-jms20:latest` |
+
+MQ connection settings are read from environment variables. The example below uses `api-app-go`;
+replacing the image name runs `api-app-go-jms20` with identical env vars:
+
+```bash
+podman run -d --name api-app-go -p 8081:8081 \
+  -e IBM_MQ_CONNECTION_LIST="host.containers.internal(1414),host.containers.internal(1415),host.containers.internal(1416)" \
+  -e IBM_MQ_CHANNEL=DEV.APP.SVRCONN \
+  -e IBM_MQ_QUEUE_MANAGER=QM1 \
+  -e IBM_MQ_QUEUE=DEV.DEMO.QL.IN \
+  -e IBM_MQ_USERNAME=app \
+  -e IBM_MQ_PASSWORD=passw0rd \
+  quay.io/voravitl/simple-mq-api-go:latest
+
+curl http://localhost:8081/api/status   # verify
+```
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `IBM_MQ_CONNECTION_LIST` | `localhost(1414),localhost(1415),localhost(1416)` | Use `host.containers.internal(...)` from a container |
+| `IBM_MQ_CHANNEL` | `DEV.APP.SVRCONN` | |
+| `IBM_MQ_QUEUE_MANAGER` | `QM1` | |
+| `IBM_MQ_QUEUE` | `DEV.DEMO.QL.IN` | |
+| `IBM_MQ_USERNAME` / `IBM_MQ_PASSWORD` | `app` / `passw0rd` | |
+| `IBM_MQ_CCDT_URL` | *(unset)* | if set, overrides connection list + channel |
+| `SERVER_PORT` | `8081` | |
+
+#### UI app
+
+nginx serves the SPA and reverse-proxies `/api` and `/ws` to the backend. The backend URL is a
+**runtime** env var (`API_UPSTREAM`), so the image is built once (with an empty `VITE_API_BASE_URL`,
+i.e. same-origin) and pointed at any API at `podman run`:
+
+```bash
+cd ui-app
+: > .env                  # empty VITE_API_BASE_URL — browser calls same-origin /api + /ws
+./build_container.sh      # npm build on host, then builds the amd64 image
+
+podman run -d --name ui-app -p 8080:8080 \
+  -e API_UPSTREAM=http://host.containers.internal:8081 \
+  quay.io/voravitl/simple-mq-ui:latest
+```
+
+Open [http://localhost:8080](http://localhost:8080). The browser talks only to
+the UI on 8080; nginx proxies `/api` and `/ws/messages` to `API_UPSTREAM`
+(defaults to `http://localhost:8081` if unset). Because everything is
+same-origin, there's no CORS to configure.
+
+### Batch test with helper scripts
+
+Two sets of helper scripts at the repository root drive multi-instance put/consume tests end to end — one set runs the `all-in-one-app` as containers, the other starts native `api-app-go` processes.
+
+| Script | Purpose |
+|--------|---------|
+| [`start-all-in-one-apps-container.sh`](start-all-in-one-apps-container.sh) | Starts several `all-in-one-app` containers (host ports `9190`+). For each instance sends 10 messages and starts the consumer. |
+| [`clear-all-in-one-apps-container.sh`](clear-all-in-one-apps-container.sh) | Stops and force-removes every running `all-in-one-*` container. |
+| [`start-go-lang-apps.sh`](start-go-lang-apps.sh) | Starts several `api-app-go` native processes (ports `8100`+). For each instance sends 10 messages and starts the consumer. |
+| [`clear-go-lang-apps.sh`](clear-go-lang-apps.sh) | Kills all `api-app-go` processes and removes log files from `logs/`. |
+
+#### Container batch test (all-in-one)
+
+```bash
+./start-all-in-one-apps-container.sh   # start the instances + run the put/consume test
+./clear-all-in-one-apps-container.sh   # tear everything down
+```
+
+> **Note:** `start-all-in-one-apps-container.sh` ships preconfigured for the
+> [Uniform Cluster](native-ha-with-uniform-cluster.md) — `IBM_MQ_QUEUE_MANAGER=*UNIQA` with
+> [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json). For this plain Native HA
+> setup, edit it to use `IBM_MQ_QUEUE_MANAGER=QM1` and mount
+> [`ccdt/ccdt.nativeha.container.json`](ccdt/ccdt.nativeha.container.json).
+
+#### Native process batch test (Go)
+
+```bash
+./start-go-lang-apps.sh    # start api-app-go instances + run the put/consume test
+./clear-go-lang-apps.sh    # kill processes and remove logs
+```
+
+> **Note:** `start-go-lang-apps.sh` ships preconfigured for the Uniform Cluster
+> (`IBM_MQ_QUEUE_MANAGER=*UNIQA`, `IBM_MQ_CCDT_URL=file:./ccdt/ccdt.cluster.json`).
+> For plain Native HA, edit it to use `IBM_MQ_QUEUE_MANAGER=QM1` and
+> `IBM_MQ_CCDT_URL=file:./ccdt/ccdt.nativeha.json`.
+
+**Check APP status**
+- Run runmqsc at active node
+```bash
+podman exec mq-node-1 bash -c "echo 'DISPLAY APSTATUS(*)' | runmqsc QM1"
+```
+Output
+```bash
+1 : DISPLAY APSTATUS(*)
+AMQ8932I: Display application status details.
+   APPLNAME(all-in-one)                    CLUSTER( )
+   COUNT(1)                                MOVCOUNT(0)
+   BALANCED(NOTAPPLIC)
+```
+
+**Application Log**
+- Use Connection List
+```log
+2026-07-12 10:19:08,192 INFO  [com.example.config.MQConnectionFactoryProducer] (Quarkus Main Thread) Use Connection List: localhost(1414),localhost(1415),localhost(1416)
+```
+- Connect to QM1
+```log
+2026-07-12 10:19:55,047 DEBUG [com.example.resource.InfoResource] (executor-thread-1) Requesting MQ info — configured queueManager: QM1
+2026-07-12 10:19:55,093 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ connection established successfully
+2026-07-12 10:19:55,094 DEBUG [com.example.resource.InfoResource] (executor-thread-1) MQ Server Host: localhost/127.0.0.1 (1414), resolvedQueueManager: QM1
+2026-07-12 10:19:55,112 DEBUG [com.example.resource.InfoResource] (executor-thread-1) InfoResponse: connected=true, queueManager=QM1, host=localhost/127.0.0.1, port=1414
+```
 
 ## Reconnect behaviour: producer vs consumer
 
@@ -940,7 +983,7 @@ reconnect loop that only runs when Layer 1 gives up and surfaces an error to the
 | **1 — client auto-reconnect** | `WMQ_CLIENT_RECONNECT` on the shared `ConnectionFactory`, capped per attempt by `WMQ_CLIENT_RECONNECT_TIMEOUT` (`ibm.mq.client-reconnect-timeout`, default 5 s) | `MQCNO_RECONNECT` on every connection; `HeartbeatInterval` (`IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) only sets how fast a dead link is *detected* |
 | **2 — app reconnect loop** | `MQConsumer.reconnectLoop()` — rebuild JMS resources every **1 s** | `Consumer.reconnectLoop()` — rebuild qmgr+queue handles every **1 s** |
 
-### Consumer (both apps — near-mirror images)
+### Consumer
 
 Long-lived connection with a poll loop:
 
@@ -954,7 +997,7 @@ the read goroutine exclusively owns the MQ handles (Stop only sets a flag + `wg.
 so shutdown and reconnect never issue MQI verbs concurrently; the Java consumer achieves
 the same with a `closing` flag, `volatile` handles, and `synchronized` start/stop.
 
-### Producer (the apps differ by design)
+### Producer
 
 - **Java** — long-lived connection via the SmallRye JMS emitter, reused across requests. A
   failover mid-send is absorbed by Layer 1 (`WMQ_CLIENT_RECONNECT`); only if the client
