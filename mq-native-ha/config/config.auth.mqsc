@@ -29,8 +29,10 @@ REFRESH SECURITY TYPE(CONNAUTH)
 * Queue Manager connect permission
 SET AUTHREC OBJTYPE(QMGR) PRINCIPAL('app') AUTHADD(CONNECT,INQ)
 
-* Grant app full access to all DEV.* queues (single level)
-SET AUTHREC PROFILE('DEV.*') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(PUT,GET,INQ,BROWSE)
+* Grant app full access to all DEV.* queues. Note DEV.** (double star):
+* a single '*' matches only ONE qualifier (DEV.FOO), so it would NOT match the
+* three-level DEV.DEMO.QL.IN. '**' matches any number of qualifiers.
+SET AUTHREC PROFILE('DEV.**') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(PUT,GET,INQ,BROWSE)
 
 * Restrict access to dead letter queue — GET only
 SET AUTHREC PROFILE('DEV.DEMO.QL.DEAD') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(GET,INQ,BROWSE)
@@ -39,3 +41,12 @@ SET AUTHREC PROFILE('DEV.DEMO.QL.DEAD') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHRMV(
 * Channel access (Note the '+' for line continuation)
 SET AUTHREC PROFILE('DEV.APP.SVRCONN') +
 OBJTYPE(CHANNEL) PRINCIPAL('app') AUTHADD(ALL)
+
+* ================================================
+* Monitoring exporter (mq_prometheus) — PCF status polling for queue depth.
+* Reuses the 'app' user; no admin user/password needed. Additive to grants above.
+* ================================================
+SET AUTHREC OBJTYPE(QMGR) PRINCIPAL('app') AUTHADD(DSP)
+SET AUTHREC PROFILE('SYSTEM.ADMIN.COMMAND.QUEUE') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(PUT)
+SET AUTHREC PROFILE('SYSTEM.DEFAULT.MODEL.QUEUE') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(GET,INQ,DSP,BROWSE)
+SET AUTHREC PROFILE('DEV.**') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(DSP)

@@ -9,6 +9,17 @@ scrape_configs:
       - targets: ['host.containers.internal:8080']
     metrics_path: /q/metrics
 
+  # mq-metric-samples exporter: per-queue metrics (ibmmq_queue_depth etc.) that
+  # the built-in exporters lack. Single target — it connects as a client and
+  # follows the active Native HA node across failover, so no per-node scrape.
+  # Port 9157 is the container-internal port (host-mapped to 9257); Prometheus
+  # is on mq-ha-net so it uses the internal port.
+  - job_name: 'mq-exporter'
+    static_configs:
+      - targets: ['mq-exporter:9157']
+    metrics_path: /metrics
+    scheme: http
+
   # IBM MQ built-in Prometheus exporter - mq-node-1
   - job_name: 'mq-node-1'
     static_configs:

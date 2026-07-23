@@ -1,0 +1,31 @@
+# Config for the mq-metric-samples mq_prometheus exporter (per-queue metrics
+# like ibmmq_queue_depth, which the MQ container's built-in metrics don't emit).
+# Mounted at /opt/config/mq_prometheus.yaml — the filename must match the
+# EXPORTER name, since the image sets IBMMQ_GLOBAL_CONFIGURATIONFILE to it.
+global:
+  useObjectStatus: true   # poll DISPLAY QSTATUS — this is what yields queue depth
+  usePublications: false  # qmgr $SYS metrics already come from the MQ container's own :9157
+  pollInterval: 30s
+  logLevel: DEBUG
+
+connection:
+  queueManager: QM1
+  # All three nodes: the exporter follows the active one across failover.
+  connName: "mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)"
+  channel: DEV.APP.SVRCONN
+  user: app
+  password: passw0rd
+
+objects:
+  queues:
+    # No "!" exclusions: a "!" flips the lib into regex mode, which first inquires
+    # *all* queues (needs DSP on every object). Plain MQ name patterns only inquire
+    # the matches, so DSP on DEV.* (granted in config.auth.mqsc) is enough.
+    - "DEV.DEMO.QL.*"
+
+prometheus:
+  port: 9157
+  metricsPath: "/metrics"
+  namespace: ibmmq
+  keepRunning: true        # stay up (report STOPPED) when the qmgr is unreachable
+  reconnectInterval: 5s

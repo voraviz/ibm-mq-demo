@@ -105,7 +105,48 @@ This is **expected and correct**. After a failover, whichever node is elected Ac
 >           summary: "All QM2 HA nodes are unreachable — possible full HA-GROUP-2 outage"
 > ```
 
+## Per-queue metrics — mq-metric-samples exporter
 
+The built-in `:9157` exporter only publishes queue-manager-level `$SYS` metrics.
+It does **not** emit per-queue depth. For `ibmmq_queue_depth` and related
+per-queue status, run the standalone [mq-metric-samples](https://github.com/ibm-messaging/mq-metric-samples)
+`mq_prometheus` exporter. IBM publishes no prebuilt image, so build it once:
+
+```bash
+bash obs-app/etc/build-mq-exporter.sh    # builds quay.io/voravitl/mq-prometheus:latest
+```
+
+`create-nativeha.sh` then starts it as the `mq-exporter` container (host `:9257`,
+container-internal `:9157`), configured by [`mq_prometheus.yaml`](mq-native-ha/config/mq_prometheus.yaml).
+
+**One target, not per-node.** Unlike the built-in exporter, this one connects as
+an MQ **client** over a multi-node `connName` and follows the Active node across
+failover. So a single scrape target covers the whole HA group:
+
+```yaml
+  - job_name: 'mq-exporter'
+    static_configs:
+      - targets: ['mq-exporter:9157']   # internal port; host-mapped to 9257
+```
+
+| Source | Scrape targets | Per-queue depth | Survives failover |
+|---|---|---|---|
+| Built-in `:9157` | all nodes (only Active answers) | ❌ | via multiple targets |
+| `mq-exporter` `:9157` | 1 (`mq-exporter`) | ✅ | client follows Active node |
+
+> **Authority gotcha:** the exporter's connection runs as `app` (the channel's
+> `MCAUSER`), and `DISPLAY QSTATUS` needs `+dsp` on the queues. Grant it with a
+> **double-star** profile — a single `*` matches only one qualifier, so
+> `DEV.*` would **not** match `DEV.DEMO.QL.IN`:
+>
+> ```
+> SET AUTHREC PROFILE('DEV.**') OBJTYPE(QUEUE) PRINCIPAL('app') AUTHADD(DSP)
+> ```
+>
+> This (plus qmgr `DSP`, `PUT` on `SYSTEM.ADMIN.COMMAND.QUEUE`, and access to the
+> reply model queue) is already in [`config.auth.mqsc`](mq-native-ha/config/config.auth.mqsc).
+> Without `+dsp` the exporter connects and emits qmgr metrics but **no**
+> `ibmmq_queue_*` series, logging `AMQ8245W` on the queue manager.
 
 ## Setup
 

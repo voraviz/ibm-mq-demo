@@ -35,6 +35,19 @@ do
     MQ_PROMETHEUS_PORT=$(expr $MQ_PROMETHEUS_PORT + 1 )
     MQ_CONSOLE_PORT=$(expr $MQ_CONSOLE_PORT + 1 )
 done
+
+# Per-queue metrics (e.g. ibmmq_queue_depth) — the MQ container's built-in
+# metrics only publish qmgr-level $SYS stats, so run the standalone exporter.
+# IBM publishes no prebuilt image; build it once with obs-app/etc/build-mq-exporter.sh.
+EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
+echo "Starting MQ metrics exporter (queue depth etc.) on :9257 ..."
+podman run --platform=linux/amd64 -d \
+  --name mq-exporter \
+  --network mq-ha-net \
+  -p 9257:9157 \
+  -v ./mq-native-ha/config/mq_prometheus.yaml:/opt/config/mq_prometheus.yaml:ro \
+  "$EXPORTER_IMAGE"
+
 sleep 10
 podman ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
 sleep 10
