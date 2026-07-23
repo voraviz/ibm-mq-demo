@@ -6,7 +6,7 @@
 # Build the SPA with an EMPTY VITE_API_BASE_URL so it calls same-origin /api and
 # /ws; nginx proxies those to API_UPSTREAM (set at runtime, see entrypoint).
 FROM registry.access.redhat.com/ubi9/nginx-124:latest
-
+# FROM registry.access.redhat.com/hi/nginx:latest
 COPY dist/ /opt/app-root/src/
 COPY nginx.conf.template /opt/app-root/etc/nginx.conf.template
 COPY docker-entrypoint.sh /opt/app-root/etc/docker-entrypoint.sh
