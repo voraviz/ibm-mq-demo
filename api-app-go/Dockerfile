@@ -29,8 +29,8 @@ RUN CGO_ENABLED=1 \
     go build -o /api-app-go .
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-# FROM registry.redhat.io/ubi9/ubi-minimal:latest
-FROM registry.access.redhat.com/hi/static:latest
+FROM registry.redhat.io/ubi9/ubi-minimal:latest
+#FROM registry.access.redhat.com/hi/static:latest
 ARG MQ_INSTALL_DIR=/opt/mqm
 
 # MQ client shared libraries. Copy the whole dir — the client dlopen's its
@@ -39,15 +39,19 @@ COPY --from=builder ${MQ_INSTALL_DIR}/lib64 ${MQ_INSTALL_DIR}/lib64
 
 # ubi-micro ships glibc + NSS modules, but not the C++ runtime that some MQ
 # client libraries link against. Bring those two over from the builder.
-COPY --from=builder /usr/lib64/libstdc++.so.6 /usr/lib64/libgcc_s.so.1 /usr/lib64/
+#COPY --from=builder /usr/lib64/libstdc++.so.6 /usr/lib64/libgcc_s.so.1 /usr/lib64/
 
 COPY --from=builder /api-app-go /app/api-app-go
+USER root
 
+RUN mkdir -p /IBM \
+    && chown 1001 /IBM
 EXPOSE 8081
 
-USER 65532
+USER 1001
 
-ENV SERVER_PORT=8081 \
+ENV HOME=/IBM \
+    SERVER_PORT=8081 \
     LD_LIBRARY_PATH=/opt/mqm/lib64
 
 ENTRYPOINT ["/app/api-app-go"]

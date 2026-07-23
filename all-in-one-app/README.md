@@ -260,6 +260,16 @@ Run the packaged app:
 java -jar target/quarkus-app/quarkus-run.jar
 ```
 
+> **Packaging gotcha (why the UI 404'd in the container).** The `quarkus-maven-plugin`
+> runs only the `build` goal — not `generate-code`/`generate-code-tests`. Those
+> codegen goals run at `generate-sources` and snapshot the app's resources *before*
+> Maven copies the built Vue UI into `target/classes` (at `process-resources`), which
+> left `META-INF/resources` out of the fast-jar. The symptom: `/api/*` worked but the
+> UI returned `Resource not found` in the container, while `quarkus:dev` was fine
+> (dev mode serves resources live from disk). This project has no codegen extension
+> (gRPC/Avro/proto), so dropping those goals is safe. If you add one later, re-add
+> them and ensure the UI is built before `generate-sources`.
+
 ---
 
 ## Container image
