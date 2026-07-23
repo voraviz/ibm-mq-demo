@@ -36,6 +36,15 @@ do
     MQ_CONSOLE_PORT=$(expr $MQ_CONSOLE_PORT + 1 )
 done
 
+sleep 10
+podman ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
+sleep 10
+clear
+echo "Wait for QM1 Native HA setting..."
+sleep 60
+QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+echo "QM1 Active on: $QM1_ACTIVE_NODE"
+
 # Per-queue metrics (e.g. ibmmq_queue_depth) — the MQ container's built-in
 # metrics only publish qmgr-level $SYS stats, so run the standalone exporter.
 # IBM publishes no prebuilt image; build it once with obs-app/etc/build-mq-exporter.sh.
@@ -47,12 +56,3 @@ podman run --platform=linux/amd64 -d \
   -p 9257:9157 \
   -v ./mq-native-ha/config/mq_prometheus.yaml:/opt/config/mq_prometheus.yaml:ro \
   "$EXPORTER_IMAGE"
-
-sleep 10
-podman ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
-sleep 10
-clear
-echo "Wait for QM1 Native HA setting..."
-sleep 60
-QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
-echo "QM1 Active on: $QM1_ACTIVE_NODE"
