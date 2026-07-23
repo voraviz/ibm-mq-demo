@@ -1,0 +1,51 @@
+# Non-root nginx config for the UI container. Serves the built SPA and proxies
+# /api and /ws to the backend. __API_UPSTREAM__ is replaced at startup by
+# docker-entrypoint.sh from the API_UPSTREAM env var — so the backend URL is a
+# runtime setting, not baked into the JS bundle. pid/temp paths live under /tmp
+# because the container runs as non-root (UID 1001) and can't write elsewhere.
+worker_processes  auto;
+pid               /tmp/nginx.pid;
+error_log         /dev/stderr warn;
+
+events { worker_connections 1024; }
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    access_log    /dev/stdout;
+
+    client_body_temp_path /tmp/client_temp;
+    proxy_temp_path       /tmp/proxy_temp;
+    fastcgi_temp_path     /tmp/fastcgi_temp;
+    uwsgi_temp_path       /tmp/uwsgi_temp;
+    scgi_temp_path        /tmp/scgi_temp;
+
+    sendfile on;
+
+    server {
+        listen 8080;
+        root   /opt/app-root/src;
+        index  index.html;
+
+        # REST — pass the full /api/... path straight through to the backend.
+        location /api/ {
+            proxy_pass __API_UPSTREAM__;
+        }
+
+        # WebSocket (/ws/messages) — needs the HTTP/1.1 Upgrade handshake and a
+        # long read timeout so the idle socket isn't dropped mid-stream.
+        location /ws/ {
+            proxy_pass __API_UPSTREAM__;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade    $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host       $host;
+            proxy_read_timeout 3600s;
+        }
+
+        # SPA fallback — unknown paths return index.html.
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}
