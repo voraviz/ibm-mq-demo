@@ -15,26 +15,31 @@ IBM MQ Native HA provides automatic failover across a three-node group using the
     - [Start Containers](#start-containers)
     - [Verify the Cluster](#verify-the-cluster)
   - [Test Applications](#test-applications)
-    - [CCDT (Client Channel Definition Table)](#ccdt-client-channel-definition-table)
-    - [All-in-one Java Application](#all-in-one-java-application)
-      - [Option A — Connection list (default)](#option-a--connection-list-default)
-      - [Option B — CCDT](#option-b--ccdt)
-      - [Build and run](#build-and-run)
-      - [OpenAPI and Swagger UI](#openapi-and-swagger-ui)
-      - [Implementation Notes](#implementation-notes)
-    - [Golang REST API](#golang-rest-api)
-    - [Golang JMS REST API](#golang-jms-rest-api)
-    - [UI app (`ui-app`)](#ui-app-ui-app)
+    - [Connection List vs CCDT](#connection-list-vs-ccdt)
+    - [The demo applications](#the-demo-applications)
+      - [All-in-one Java Application](#all-in-one-java-application)
+      - [Golang REST API — api-app-go \& api-app-go-jms20](#golang-rest-api--api-app-go--api-app-go-jms20)
+      - [UI app](#ui-app)
     - [Run apps as containers (Podman)](#run-apps-as-containers-podman)
       - [All-in-one app](#all-in-one-app)
       - [Go API](#go-api)
-      - [UI app](#ui-app)
+      - [UI app](#ui-app-1)
+    - [Run apps as containers (Kubernetes)](#run-apps-as-containers-kubernetes)
+      - [ConfigMap for config files](#configmap-for-config-files)
+      - [Deployments \& Services](#deployments--services)
     - [Batch test with helper scripts](#batch-test-with-helper-scripts)
       - [Container batch test (all-in-one)](#container-batch-test-all-in-one)
       - [Native process batch test (Go)](#native-process-batch-test-go)
-  - [Reconnect behaviour: producer vs consumer](#reconnect-behaviour-producer-vs-consumer)
-    - [Consumer](#consumer)
-    - [Producer](#producer)
+    - [Build and run from source](#build-and-run-from-source)
+      - [Prerequisites — IBM MQ C client (Go)](#prerequisites--ibm-mq-c-client-go)
+      - [All-in-one Java](#all-in-one-java)
+      - [Go APIs](#go-apis)
+      - [UI app](#ui-app-2)
+    - [Application logic \& failure handling](#application-logic--failure-handling)
+      - [Two-layer reconnect model](#two-layer-reconnect-model)
+      - [Consumer](#consumer)
+      - [Producer](#producer)
+      - [Frontend retry \& counter](#frontend-retry--counter)
   - [Failover Test](#failover-test)
 
 ---
@@ -321,9 +326,11 @@ Response from a **replica** node:
 
 ## Test Applications
 
-All test applications support two connection modes — **connection name list** (default) and **CCDT** — and enable automatic client reconnect so that a failover is transparent to the application layer.
+Three demo apps exercise the Native HA group — a Java **all-in-one-app**, two Go REST APIs (**api-app-go** and **api-app-go-jms20**), and a Vue.js **ui-app**. All support two connection modes — **connection name list** (default) and **CCDT** — and enable automatic client reconnect so a failover is transparent to the application layer.
 
-### CCDT (Client Channel Definition Table)
+The flow below is: how a client finds MQ (connection list vs CCDT) → what each app is → run them as containers → batch test → build from source → how the reconnect/failure logic works.
+
+### Connection List vs CCDT
 
 A **Client Channel Definition Table (CCDT)** is a JSON file that describes the MQ channel and connection endpoints the client should use. It is an alternative to specifying `connectionList` and `channel` separately — the client reads both from the CCDT file instead.
 
@@ -385,13 +392,24 @@ Two CCDT files are provided in the [`ccdt/`](ccdt/) directory:
 
 ---
 
-### All-in-one Java Application
+### The demo applications
+
+This section covers **what each app is and how it picks its connection mode**. To actually run them, use [Run apps as containers (Podman)](#run-apps-as-containers-podman) (the primary path) or [Build and run from source](#build-and-run-from-source).
+
+| App | Language / stack | Pairs with | MQ layer |
+|-----|------------------|------------|----------|
+| `all-in-one-app` | Java, Quarkus/JMS | bundled Vue.js UI | JMS (`MQConnectionFactory`) |
+| `api-app-go` | Go | `ui-app` | raw `mq-golang/v5` (MQI) |
+| `api-app-go-jms20` | Go | `ui-app` | `mq-golang-jms20` (JMS-style) |
+| `ui-app` | Vue.js + nginx | either Go API | browser → REST / WebSocket |
+
+#### All-in-one Java Application
 
 [`all-in-one-app`](all-in-one-app) is a Quarkus/JMS backend with a bundled Vue.js frontend.
 
 The app supports two connection modes — **connection list** (default) and **CCDT**. The mode is selected at startup based on whether `ibm.mq.ccdt-url` is set. If it is present and non-blank, CCDT is used; otherwise the connection list and channel are used.
 
-#### Option A — Connection list (default)
+##### Option A — Connection list (default)
 
 [`application.properties`](all-in-one-app/src/main/resources/application.properties):
 
@@ -402,7 +420,7 @@ ibm.mq.channel=DEV.APP.SVRCONN
 ibm.mq.queue-manager=QM1
 ```
 
-#### Option B — CCDT
+##### Option B — CCDT
 
 uncomment `ibm.mq.ccdt-url` and comment out `connection-list` and `channel`:
 
@@ -457,24 +475,7 @@ public class MQConnectionFactoryProducer {
 }
 ```
 
-#### Build and run
-
-```bash
-# Build
-cd all-in-one-app
-./mvnw clean package
-
-# Run from JAR
-java -jar target/quarkus-app/quarkus-run.jar
-```
-
-Open [http://localhost:8080](http://localhost:8080) in a browser. The top menu bar shows which MQ node the application is currently connected to.
-
-![Application connected to mq-node-2](images/mq-app.png)
-
-> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
-
-#### OpenAPI and Swagger UI
+##### OpenAPI and Swagger UI
 
 The REST API is fully documented with OpenAPI 3. Once the application is running:
 You can access swagger-ui at /q/swagger-ui
@@ -497,75 +498,19 @@ Swagger-UI
 
 ![swagger UI](images/swagger-ui.png)
 
-#### Implementation Notes
+#### Golang REST API — `api-app-go` & `api-app-go-jms20`
 
-**Frontend resilience during failover — `sendOneWithRetry()`**
+There are two interchangeable Go backends. Both expose identical REST endpoints, the same
+message format, and the same WebSocket broadcast — they differ only in the MQ client layer.
+Pair either with the [`ui-app`](ui-app) Vue.js frontend.
 
-The bulk-send feature ("Send N messages") in the Vue.js frontend is implemented as a
-`for` loop that calls `POST /api/messages` once per message with an optional delay between
-calls. During a Native HA failover the HTTP request can fail while the Java process
-reconnects to the new active node. Without extra handling, the first failure would throw
-out of the loop and **silently drop all remaining messages**.
+| | `api-app-go` | `api-app-go-jms20` |
+|--|--|--|
+| Library | `mq-golang/v5/ibmmq` (raw MQI) | `mq-golang-jms20` (JMS-style) |
+| Send | `qObj.Put(md, pmo, bytes)` | `ctx.CreateProducer().SendString(dest, body)` |
+| Receive | `qObj.Get(md, gmo, buf)` + MQRC 2033 check | `consumer.Receive(500)` — `nil` = no message |
 
-[`PutPanel.vue`](all-in-one-app/src/main/frontend/src/components/PutPanel.vue) wraps
-each individual send in `sendOneWithRetry()`:
-
-```js
-async function sendOneWithRetry() {
-  while (true) {
-    if (cancelSignal) return false        // user pressed Cancel
-    try {
-      await sendOne()                     // POST /api/messages
-      return true                         // success — advance the loop
-    } catch (err) {
-      notification.value = {
-        type: 'warning',
-        message: `Send failed (${err.message}) — retrying in ${RETRY_DELAY_MS / 1000}s…`,
-      }
-      await sleep(RETRY_DELAY_MS)         // wait 2 s, then retry the same message
-      notification.value = null
-    }
-  }
-}
-```
-
-The outer `send()` loop calls `sendOneWithRetry()` for every message instead of calling
-`sendOne()` directly:
-
-```
-for each message in batch:
-    sendOneWithRetry()  ← retries this one message until success or Cancel
-    advance progress bar
-    sleep(delayMs)
-```
-
-**What happens during a failover:**
-
-1. The active MQ node is stopped. The in-flight `POST /api/messages` fails (network error
-   or `503` while Quarkus reconnects).
-2. `sendOneWithRetry()` catches the error, shows a yellow "retrying in 2s…" banner, and
-   sleeps 2 seconds.
-3. Meanwhile the IBM MQ client library (`WMQ_CLIENT_RECONNECT`) reconnects Quarkus to the
-   new active node — typically within a few seconds.
-4. On the next retry the `POST` succeeds. The warning banner clears automatically.
-5. The loop continues from the **same message position** — no message is skipped or
-   double-sent.
-6. The user can press **Cancel** at any time to stop retrying and end the batch cleanly.
-
-**Why the server-side counter never resets**
-
-The `[#N]` sequence number is generated by an `AtomicLong counter` in
-[`MessageResource.java`](all-in-one-app/src/main/java/com/example/resource/MessageResource.java)
-on the `@ApplicationScoped` CDI bean. The bean lives for the lifetime of the process, so
-the counter is only reset if the JVM restarts. The MQ reconnect is fully transparent at
-the Java layer — only the TCP connection is re-established, the bean and its counter are
-untouched.
-
----
-
-### Golang REST API
-
-[`api-app-go`](api-app-go) is a standalone Go REST API backend. Pair it with the [`ui-app`](ui-app) Vue.js frontend.
+Both listen on **http://localhost:8081** by default and read all MQ settings from environment variables.
 
 **Configuration** — [`api-app-go/config/config.go`](api-app-go/config/config.go):
 
@@ -590,7 +535,7 @@ func Load() *Config {
 
 When `IBM_MQ_CCDT_URL` is set, it takes precedence over `IBM_MQ_CONNECTION_LIST` and `IBM_MQ_CHANNEL` — both channel name and connection endpoints are read from the CCDT file.
 
-**Automatic reconnect** — [`api-app-go/mq/connect.go`](api-app-go/mq/connect.go):
+**Automatic reconnect (`api-app-go`)** — [`api-app-go/mq/connect.go`](api-app-go/mq/connect.go):
 
 ```go
 cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
@@ -600,150 +545,13 @@ cno.Options = ibmmq.MQCNO_CLIENT_BINDING |
     ibmmq.MQCNO_RECONNECT
 ```
 
-`MQCNO_RECONNECT` is what makes failover transparent: when the connection drops, the
-MQ client library reconnects through the connection name list (or CCDT) automatically,
-blocking in-flight MQI calls rather than failing them.
+`cd.HeartbeatInterval` (env `IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) is the **channel
+heartbeat interval** — it governs how quickly a dead connection is *detected*, not a
+reconnect timeout.
 
-`cd.HeartbeatInterval` is set to `HeartbeatInterval` (env `IBM_MQ_HEARTBEAT_INTERVAL`,
-default 5 s). This is the **channel heartbeat interval** — it governs how quickly a dead
-connection is *detected*, not a reconnect timeout. It is distinct from the Java app's
-`WMQ_CLIENT_RECONNECT_TIMEOUT`, which is a genuine cap on each reconnect attempt; the two
-apps are not equivalent on this point. The Go consumer's own retry cadence lives in
-`reconnectLoop()` (a hard-coded 1 s between attempts, see below), not in this setting.
-
-**Prerequisites — IBM MQ C client libraries**
-
-The `mq-golang` library uses CGO and requires the IBM MQ C client headers and shared libraries at build time.
-
-- **macOS:**
-
-  ```bash
-  brew tap ibm-messaging/ibmmq
-  brew install ibm-messaging/ibmmq/mqdevtoolkit
-  # Installs to /opt/mqm — the default CGO search path for mq-golang
-  ```
-
-- **Linux:**
-
-  ```bash
-  MQ_URL=https://public.dhe.ibm.com/ibmdl/export/pub/software/websphere/messaging/mqdev/redist/9.4.5.1-IBM-MQC-Redist-LinuxX64.tar.gz
-  mkdir -p /opt/mqm && curl -fsSL "$MQ_URL" | tar -xz -C /opt/mqm
-  ```
-
-  If installed to a non-default path, set the CGO flags before building:
-
-  ```bash
-  export CGO_CFLAGS="-I/your/path/inc -D_REENTRANT"
-  export CGO_LDFLAGS="-L/your/path/lib64 -lmqm_r -Wl,-rpath,/your/path/lib64"
-  ```
-
-**Build and run the API:**
-
-```bash
-cd api-app-go
-go build -o api-app-go .
-./api-app-go
-```
-
-The API listens on **http://localhost:8081** by default. Override any setting via environment variable before running.
-
-**Connection list:**
-
-```bash
-IBM_MQ_CONNECTION_LIST="localhost(1414),localhost(1415),localhost(1416)" \
-IBM_MQ_USERNAME="app" \
-IBM_MQ_PASSWORD="passw0rd" \
-IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
-./api-app-go
-```
-
-**CCDT** — set `IBM_MQ_CCDT_URL` instead; `IBM_MQ_CONNECTION_LIST` and `IBM_MQ_CHANNEL` are ignored when CCDT is used:
-
-```bash
-IBM_MQ_CCDT_URL="file:///$(pwd)/../ccdt/ccdt.nativeha.json" \
-IBM_MQ_QUEUE_MANAGER="QM1" \
-IBM_MQ_USERNAME="app" \
-IBM_MQ_PASSWORD="passw0rd" \
-IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
-./api-app-go
-```
-
-**Producer behaviour during failover**
-
-The Go producer ([`api-app-go/mq/producer.go`](api-app-go/mq/producer.go)) opens a
-**fresh MQ connection per `PUT` call** — there is no long-lived connection to drop. On
-every call it runs: connect → open queue → put → close. If any step fails, the counter
-is **atomically rolled back** before the error is returned:
-
-```go
-func (p *Producer) Put(text string) (string, error) {
-    n := p.counter.Add(1)              // reserve a sequence number
-    body := fmt.Sprintf("[#%d] %s", n, text)
-
-    qmgr, _, err := connect(p.cfg)
-    if err != nil {
-        p.counter.Add(-1)              // rollback — no gap in [#N] sequence
-        return "", fmt.Errorf("MQ connect: %w", err)
-    }
-    defer qmgr.Disc()
-    ...
-    if err := qObj.Put(md, pmo, []byte(body)); err != nil {
-        p.counter.Add(-1)              // rollback
-        return "", fmt.Errorf("MQ put: %w", err)
-    }
-    return body, nil                   // only reaches here on confirmed delivery
-}
-```
-
-The Java `all-in-one-app` producer reaches the same guarantees a different way. Its
-`MessageResource.putMessage()` uses a SmallRye Reactive Messaging emitter (`@Channel("mq-put")`,
-`smallrye-jms` connector) over a **long-lived** connection, and **awaits the emitter's
-acknowledgement** before responding — so the two backends now behave equivalently:
-
-| | Java `all-in-one-app` | Go `api-app-go` |
-|--|--|--|
-| Connection model | Long-lived, reused across requests | Fresh connection per `PUT` |
-| Counter on failure | Incremented, then **rolled back** (`decrementAndGet`) | Incremented, then **rolled back** (`counter.Add(-1)`) |
-| Counter after failover | Always equals confirmed deliveries (no gap) | Always equals confirmed deliveries (no gap) |
-| HTTP response on success / MQ error | `202 Accepted` / `500 Internal Server Error` | `202 Accepted` / `500 Internal Server Error` |
-| Failover handling | Client `WMQ_CLIENT_RECONNECT` on the shared connection | `MQCNO_RECONNECT` scoped to that single `PUT` |
-
-Because `PUT /api/messages` returns `500` when the MQ connection fails, the
-`sendOneWithRetry()` loop in the Vue frontend catches it, waits 2 seconds, and retries
-the **same message**. The retry loop is identical regardless of which backend is used.
-
-> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
-
-### Golang JMS REST API
-
-[`api-app-go-jms20`](api-app-go-jms20) is a Go REST API that uses the higher-level
-[mq-golang-jms20](https://github.com/ibm-messaging/mq-golang-jms20) JMS-style library
-instead of the raw `mq-golang/v5` C-binding. It is functionally identical to `api-app-go` —
-same endpoints, same message format, same WebSocket broadcast — with the MQ layer replaced by
-`JMSContext`, `JMSProducer`, and `JMSConsumer`.
-
-| | `api-app-go` | `api-app-go-jms20` |
-|--|--|--|
-| Library | `mq-golang/v5/ibmmq` | `mq-golang-jms20` |
-| Send | `qObj.Put(md, pmo, bytes)` | `ctx.CreateProducer().SendString(dest, body)` |
-| Receive | `qObj.Get(md, gmo, buf)` + MQRC 2033 check | `consumer.Receive(500)` — `nil` = no message |
-
-**Connection factory** — [`api-app-go-jms20/mq/connect.go`](api-app-go-jms20/mq/connect.go):
-
-```go
-cf := mqjms.ConnectionFactoryImpl{
-    QMName:      cfg.QueueManager,
-    Hostname:    host,       // first entry of connection list
-    PortNumber:  port,
-    ChannelName: cfg.Channel,
-    UserName:    cfg.Username,
-    Password:    cfg.Password,
-}
-```
-
-**Multi-host HA / CCDT** — `ConnectionFactoryImpl` only exposes a single `Hostname`+`PortNumber`,
-so an `MQOptions` callback is used to inject the full connection details and enable
-`MQCNO_RECONNECT` at connect time:
+**Connection factory (`api-app-go-jms20`)** — [`api-app-go-jms20/mq/connect.go`](api-app-go-jms20/mq/connect.go).
+`ConnectionFactoryImpl` only exposes a single `Hostname`+`PortNumber`, so an `MQOptions`
+callback injects the full connection details and enables `MQCNO_RECONNECT` at connect time:
 
 ```go
 func connectOption(cfg *config.Config) jms20subset.MQOptions {
@@ -764,9 +572,9 @@ func connectOption(cfg *config.Config) jms20subset.MQOptions {
 }
 ```
 
-`MQCNO_RECONNECT` (not `MQCNO_RECONNECT_Q_MGR`) allows reconnect within a Native HA group **and** across queue managers in a Uniform Cluster. `_Q_MGR` would block cross-QM balancing entirely.
+In both apps `MQCNO_RECONNECT` (not `MQCNO_RECONNECT_Q_MGR`) allows reconnect within a Native HA group **and** across queue managers in a Uniform Cluster; `_Q_MGR` would block cross-QM balancing entirely.
 
-**Consumer poll loop** — [`api-app-go-jms20/mq/consumer.go`](api-app-go-jms20/mq/consumer.go):
+The `api-app-go-jms20` consumer poll loop ([`consumer.go`](api-app-go-jms20/mq/consumer.go)) mirrors the raw variant — a 500 ms receive timeout, `nil`/`nil` meaning "no message":
 
 ```go
 // 500ms receive timeout — mirrors jmsConsumer.receive(500) in MQConsumer.java.
@@ -777,53 +585,11 @@ if msg == nil    { continue }           // timeout, no message
 text := *msg.(jms20subset.TextMessage).GetText()
 ```
 
-**Prerequisites — IBM MQ C client libraries**
+See [Application logic & failure handling](#application-logic--failure-handling) for how the producer and consumer behave during a failover.
 
-`mq-golang-jms20` wraps `mq-golang/v5` and therefore also requires CGO and the IBM MQ
-C client. Use the same setup as for `api-app-go` above.
+#### UI app
 
-**Build and run the API:**
-
-```bash
-cd api-app-go-jms20
-go build -o api-app-go-jms20 .
-./api-app-go-jms20
-```
-
-The API listens on **http://localhost:8081** by default (same port as `api-app-go`).
-Override settings via environment variables before running:
-
-```bash
-IBM_MQ_CONNECTION_LIST="localhost(1414),localhost(1415),localhost(1416)" \
-IBM_MQ_USERNAME="app" \
-IBM_MQ_PASSWORD="passw0rd" \
-IBM_MQ_QUEUE="DEV.DEMO.QL.IN" \
-./api-app-go-jms20
-```
-
-> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
-
-### UI app (`ui-app`)
-
-The Vue.js frontend is a separate Vite app. It proxies `/api` and `/ws` to `http://localhost:8081` automatically in dev mode, so no extra configuration is needed.
-
-```bash
-cd ui-app
-npm install        # first time only
-npm run dev
-```
-
-Open [http://localhost:8080](http://localhost:8080) in a browser.
-
-> To point the UI at a non-default API host, copy [`.env.example`](ui-app/.env.example) and set `VITE_API_BASE_URL`:
->
-> ```bash
-> cp ui-app/.env.example ui-app/.env
-> # edit .env and set VITE_API_BASE_URL=http://<api-host>:8081
-> npm run dev
-> ```
-
-> To run as a container instead, see [Run apps as containers (Podman)](#run-apps-as-containers-podman).
+The Vue.js frontend ([`ui-app`](ui-app)) is a separate Vite/nginx app. In dev it proxies `/api` and `/ws` to `http://localhost:8081`; as a container the backend URL is the runtime env var `API_UPSTREAM`. It talks only to the Go API over REST + WebSocket — it has no direct MQ connection, so it inherits whatever connection mode the API uses.
 
 ### Run apps as containers (Podman)
 
@@ -909,6 +675,145 @@ the UI on 8080; nginx proxies `/api` and `/ws/messages` to `API_UPSTREAM`
 (defaults to `http://localhost:8081` if unset). Because everything is
 same-origin, there's no CORS to configure.
 
+### Run apps as containers (Kubernetes)
+
+The same images run on Kubernetes. The only extra piece is a **ConfigMap** for the files the
+all-in-one app mounts (its `application.properties` and CCDT) — the Go APIs and UI take plain
+env vars and need no mounted files.
+
+> **MQ reachability:** these manifests assume the three queue managers are reachable in-cluster
+> as Services `mq-node-1`, `mq-node-2`, `mq-node-3` on port `1414` (same hostnames as the Podman
+> network), so the connection list and container CCDT work unchanged. To reach an MQ group
+> *outside* the cluster, replace those with an `ExternalName` Service (or a Service + manual
+> `Endpoints`) per node.
+>
+> **Architecture:** the Go API images are **linux/amd64** only — schedule them on amd64 nodes.
+
+#### ConfigMap for config files
+
+Build it straight from the repo files rather than hand-writing the properties into YAML:
+
+```bash
+kubectl create configmap all-in-one-config \
+  --from-file=application.properties=all-in-one-app/src/main/resources/application.properties \
+  --from-file=ccdt.json=ccdt/ccdt.nativeha.container.json
+```
+
+> In the mounted `application.properties`, point the CCDT at the mount path —
+> `ibm.mq.ccdt-url=file:/config/ccdt.json` — or comment it out to use
+> `ibm.mq.connection-list=mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)` instead.
+
+#### Deployments & Services
+
+**all-in-one** — mounts the ConfigMap at `/config`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: all-in-one
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: all-in-one } }
+  template:
+    metadata: { labels: { app: all-in-one } }
+    spec:
+      containers:
+        - name: all-in-one
+          image: quay.io/voravitl/simple-mq-app:latest
+          ports: [{ containerPort: 8080 }]
+          env:
+            - name: QUARKUS_CONFIG_LOCATIONS
+              value: file:///config/application.properties
+          volumeMounts:
+            - { name: config, mountPath: /config }
+      volumes:
+        - name: config
+          configMap: { name: all-in-one-config }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: all-in-one }
+spec:
+  selector: { app: all-in-one }
+  ports: [{ port: 8080, targetPort: 8080 }]
+```
+
+**Go API** (`api-app-go` or `api-app-go-jms20`) — env vars only. Swap the image for the JMS20 variant:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app-go
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: api-app-go } }
+  template:
+    metadata: { labels: { app: api-app-go } }
+    spec:
+      containers:
+        - name: api-app-go
+          image: quay.io/voravitl/simple-mq-api-go:latest   # or :...-jms20
+          ports: [{ containerPort: 8081 }]
+          env:
+            - { name: IBM_MQ_CONNECTION_LIST, value: "mq-node-1(1414),mq-node-2(1414),mq-node-3(1414)" }
+            - { name: IBM_MQ_CHANNEL,         value: DEV.APP.SVRCONN }
+            - { name: IBM_MQ_QUEUE_MANAGER,   value: QM1 }
+            - { name: IBM_MQ_QUEUE,           value: DEV.DEMO.QL.IN }
+            - { name: IBM_MQ_USERNAME,        value: app }
+            # Move the password to a Secret in anything but a throwaway demo:
+            #   valueFrom: { secretKeyRef: { name: mq-app, key: password } }
+            - { name: IBM_MQ_PASSWORD,        value: passw0rd }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: api-app-go }
+spec:
+  selector: { app: api-app-go }
+  ports: [{ port: 8081, targetPort: 8081 }]
+```
+
+> To use a CCDT instead of the connection list, put it in its own ConfigMap
+> (`kubectl create configmap ccdt --from-file=ccdt.json=ccdt/ccdt.nativeha.json`), mount it,
+> and set `IBM_MQ_CCDT_URL=file:/config/ccdt.json`.
+
+**UI** — `API_UPSTREAM` points at the Go API Service by its in-cluster DNS name:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-app
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ui-app } }
+  template:
+    metadata: { labels: { app: ui-app } }
+    spec:
+      containers:
+        - name: ui-app
+          image: quay.io/voravitl/simple-mq-ui:latest
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: API_UPSTREAM, value: http://api-app-go:8081 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ui-app }
+spec:
+  type: LoadBalancer     # or ClusterIP + Ingress
+  selector: { app: ui-app }
+  ports: [{ port: 8080, targetPort: 8080 }]
+```
+
+Apply and open the UI:
+
+```bash
+kubectl apply -f <your-manifests>/
+kubectl port-forward svc/ui-app 8080:8080   # or use the LoadBalancer / Ingress address
+```
+
 ### Batch test with helper scripts
 
 Two sets of helper scripts at the repository root drive multi-instance put/consume tests end to end — one set runs the `all-in-one-app` as containers, the other starts native `api-app-go` processes.
@@ -972,7 +877,84 @@ AMQ8932I: Display application status details.
 2026-07-12 10:19:55,112 DEBUG [com.example.resource.InfoResource] (executor-thread-1) InfoResponse: connected=true, queueManager=QM1, host=localhost/127.0.0.1, port=1414
 ```
 
-## Reconnect behaviour: producer vs consumer
+### Build and run from source
+
+Prefer containers (above) for a quick test. To build and run locally instead:
+
+#### Prerequisites — IBM MQ C client (Go)
+
+The Go apps use CGO via `mq-golang`, which needs the IBM MQ C client headers and libraries at build time. (The Java and UI apps do not.)
+
+- **macOS:**
+
+  ```bash
+  brew tap ibm-messaging/ibmmq
+  brew install ibm-messaging/ibmmq/mqdevtoolkit
+  # Installs to /opt/mqm — the default CGO search path for mq-golang
+  ```
+
+- **Linux:**
+
+  ```bash
+  MQ_URL=https://public.dhe.ibm.com/ibmdl/export/pub/software/websphere/messaging/mqdev/redist/9.4.5.1-IBM-MQC-Redist-LinuxX64.tar.gz
+  mkdir -p /opt/mqm && curl -fsSL "$MQ_URL" | tar -xz -C /opt/mqm
+  ```
+
+  If installed to a non-default path, set the CGO flags before building:
+
+  ```bash
+  export CGO_CFLAGS="-I/your/path/inc -D_REENTRANT"
+  export CGO_LDFLAGS="-L/your/path/lib64 -lmqm_r -Wl,-rpath,/your/path/lib64"
+  ```
+
+#### All-in-one Java
+
+```bash
+cd all-in-one-app
+./mvnw clean package
+java -jar target/quarkus-app/quarkus-run.jar
+```
+
+Open [http://localhost:8080](http://localhost:8080) — the top menu bar shows which MQ node the app is connected to.
+
+![Application connected to mq-node-2](images/mq-app.png)
+
+#### Go APIs
+
+Build either variant the same way; both listen on `:8081`. Connection mode is chosen by env var — set `IBM_MQ_CCDT_URL` to use a CCDT (it then overrides `IBM_MQ_CONNECTION_LIST` and `IBM_MQ_CHANNEL`):
+
+```bash
+cd api-app-go            # or: cd api-app-go-jms20
+go build -o app .
+
+# Connection list (default)
+IBM_MQ_CONNECTION_LIST="localhost(1414),localhost(1415),localhost(1416)" \
+IBM_MQ_USERNAME="app" IBM_MQ_PASSWORD="passw0rd" IBM_MQ_QUEUE="DEV.DEMO.QL.IN" ./app
+
+# CCDT
+IBM_MQ_CCDT_URL="file:///$(pwd)/../ccdt/ccdt.nativeha.json" IBM_MQ_QUEUE_MANAGER="QM1" \
+IBM_MQ_USERNAME="app" IBM_MQ_PASSWORD="passw0rd" IBM_MQ_QUEUE="DEV.DEMO.QL.IN" ./app
+```
+
+#### UI app
+
+```bash
+cd ui-app
+npm install        # first time only
+npm run dev        # proxies /api and /ws to http://localhost:8081
+```
+
+Open [http://localhost:8080](http://localhost:8080). To point the UI at a non-default API host, copy [`.env.example`](ui-app/.env.example) and set `VITE_API_BASE_URL`:
+
+```bash
+cp ui-app/.env.example ui-app/.env
+# edit .env: VITE_API_BASE_URL=http://<api-host>:8081
+npm run dev
+```
+
+### Application logic & failure handling
+
+#### Two-layer reconnect model
 
 Every app uses the same **two-layer** model. Layer 1 is the IBM MQ *client library*
 auto-reconnect, which makes HA/cluster failover transparent. Layer 2 is an *application*
@@ -983,7 +965,7 @@ reconnect loop that only runs when Layer 1 gives up and surfaces an error to the
 | **1 — client auto-reconnect** | `WMQ_CLIENT_RECONNECT` on the shared `ConnectionFactory`, capped per attempt by `WMQ_CLIENT_RECONNECT_TIMEOUT` (`ibm.mq.client-reconnect-timeout`, default 5 s) | `MQCNO_RECONNECT` on every connection; `HeartbeatInterval` (`IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) only sets how fast a dead link is *detected* |
 | **2 — app reconnect loop** | `MQConsumer.reconnectLoop()` — rebuild JMS resources every **1 s** | `Consumer.reconnectLoop()` — rebuild qmgr+queue handles every **1 s** |
 
-### Consumer
+#### Consumer
 
 Long-lived connection with a poll loop:
 
@@ -997,7 +979,7 @@ the read goroutine exclusively owns the MQ handles (Stop only sets a flag + `wg.
 so shutdown and reconnect never issue MQI verbs concurrently; the Java consumer achieves
 the same with a `closing` flag, `volatile` handles, and `synchronized` start/stop.
 
-### Producer
+#### Producer
 
 - **Java** — long-lived connection via the SmallRye JMS emitter, reused across requests. A
   failover mid-send is absorbed by Layer 1 (`WMQ_CLIENT_RECONNECT`); only if the client
@@ -1008,8 +990,75 @@ the same with a `closing` flag, `volatile` handles, and `synchronized` start/sto
   a non-event, and failover *during* a request is covered by `MQCNO_RECONNECT` for that one
   call. On failure the counter is rolled back and the request returns `500`.
 
-In both cases the client (`ui-app` / bundled frontend) retries the failed `PUT` after 2 s,
-so a failover during a bulk send loses no messages.
+The Go producer ([`api-app-go/mq/producer.go`](api-app-go/mq/producer.go)) rolls the
+counter back atomically on any failure, so the `[#N]` sequence never has a gap:
+
+```go
+func (p *Producer) Put(text string) (string, error) {
+    n := p.counter.Add(1)              // reserve a sequence number
+    body := fmt.Sprintf("[#%d] %s", n, text)
+
+    qmgr, _, err := connect(p.cfg)
+    if err != nil {
+        p.counter.Add(-1)              // rollback — no gap in [#N] sequence
+        return "", fmt.Errorf("MQ connect: %w", err)
+    }
+    defer qmgr.Disc()
+    ...
+    if err := qObj.Put(md, pmo, []byte(body)); err != nil {
+        p.counter.Add(-1)              // rollback
+        return "", fmt.Errorf("MQ put: %w", err)
+    }
+    return body, nil                   // only reaches here on confirmed delivery
+}
+```
+
+The Java `all-in-one-app` uses a SmallRye emitter (`@Channel("mq-put")`) over a long-lived
+connection and **awaits the acknowledgement** before responding, reaching the same guarantee:
+
+| | Java `all-in-one-app` | Go `api-app-go` |
+|--|--|--|
+| Connection model | Long-lived, reused across requests | Fresh connection per `PUT` |
+| Counter on failure | Incremented, then **rolled back** (`decrementAndGet`) | Incremented, then **rolled back** (`counter.Add(-1)`) |
+| Counter after failover | Always equals confirmed deliveries (no gap) | Always equals confirmed deliveries (no gap) |
+| HTTP response on success / MQ error | `202 Accepted` / `500 Internal Server Error` | `202 Accepted` / `500 Internal Server Error` |
+| Failover handling | Client `WMQ_CLIENT_RECONNECT` on the shared connection | `MQCNO_RECONNECT` scoped to that single `PUT` |
+
+#### Frontend retry & counter
+
+The bulk-send loop in the Vue frontend wraps each message in `sendOneWithRetry()`
+([`PutPanel.vue`](all-in-one-app/src/main/frontend/src/components/PutPanel.vue)). Because a
+`PUT` returns `500` while the backend reconnects, without this a single failure would throw
+out of the loop and **silently drop all remaining messages**:
+
+```js
+async function sendOneWithRetry() {
+  while (true) {
+    if (cancelSignal) return false        // user pressed Cancel
+    try {
+      await sendOne()                     // POST /api/messages
+      return true                         // success — advance the loop
+    } catch (err) {
+      notification.value = {
+        type: 'warning',
+        message: `Send failed (${err.message}) — retrying in ${RETRY_DELAY_MS / 1000}s…`,
+      }
+      await sleep(RETRY_DELAY_MS)         // wait 2 s, then retry the same message
+      notification.value = null
+    }
+  }
+}
+```
+
+During a failover: the in-flight `POST` fails → a "retrying in 2s…" banner shows → the MQ
+client reconnects to the new active node → the retry succeeds and the loop continues **from
+the same message position**. No message is skipped or double-sent, and **Cancel** ends the
+batch cleanly at any time. The retry loop is identical regardless of which backend is used.
+
+The `[#N]` sequence number comes from an `AtomicLong` on an `@ApplicationScoped` bean
+([`MessageResource.java`](all-in-one-app/src/main/java/com/example/resource/MessageResource.java)),
+which lives for the JVM's lifetime — the MQ reconnect only re-establishes the TCP
+connection, so the counter is never reset by a failover.
 
 ---
 
