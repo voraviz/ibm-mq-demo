@@ -1,0 +1,27 @@
+# QM2 (HA-GROUP-2) exporter config — twin of mq_prometheus.yaml (QM1).
+# Host filename differs, but it is bind-mounted to the fixed container path
+# /opt/config/mq_prometheus.yaml that IBMMQ_GLOBAL_CONFIGURATIONFILE points at.
+global:
+  useObjectStatus: true   # poll DISPLAY QSTATUS — this is what yields queue depth
+  usePublications: false  # qmgr $SYS metrics already come from the MQ container's own :9157
+  pollInterval: 30s
+  logLevel: DEBUG
+
+connection:
+  queueManager: QM2
+  # Nodes 4–6: the exporter follows the active one across failover.
+  connName: "mq-node-4(1414),mq-node-5(1414),mq-node-6(1414)"
+  channel: DEV.APP.SVRCONN
+  user: app
+  password: passw0rd
+
+objects:
+  queues:
+    - "DEV.DEMO.QL.*"
+
+prometheus:
+  port: 9157
+  metricsPath: "/metrics"
+  namespace: ibmmq
+  keepRunning: true        # stay up (report STOPPED) when the qmgr is unreachable
+  reconnectInterval: 5s

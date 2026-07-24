@@ -11,14 +11,23 @@
                ▼
   ┌───────────────────────────────── mq-ha-net (podman network) ───────────────────────────────┐
   │                                                                                            │
-  │   ┌─────────────────┐  scrape :9157   ┌──────────────────────────────────────────────────┐ │
+  │   ┌─────────────────┐  scrape :9157   ┌── HA-GROUP-1 (QM1) ──────────────────────────────┐ │
   │   │                 │ ──────────────► │  mq-node-1  :9157  (Active QM1)          ✅ up    │ │
   │   │                 │ - - - - - - - ► │  mq-node-2  :9157  (Replica)             ❌ down  │ │
   │   │                 │ - - - - - - - ► │  mq-node-3  :9157  (Replica)             ❌ down  │ │
+  │   │                 │                 └──────────────────────────────────────────────────┘  │
+  │   │                 │  scrape :9157   ┌──────────────────────────────────────────────────┐  │
+  │   │                 │ ──────────────► │  mq-exporter     :9157 (QM1 per-queue depth) ✅   │  │
+  │   │                 │                 │  MQ client → follows QM1's Active node            │  │
   │   │   Prometheus    │                 └──────────────────────────────────────────────────┘  │
-  │   │   :9090         │  scrape :9157   ┌──────────────────────────────────────────────────┐  │
-  │   │                 │ ──────────────► │  mq-exporter :9157 (per-queue depth)     ✅ up   │  │
-  │   │                 │                 │  MQ client → follows the Active node             │  │
+  │   │   :9090         │  scrape :9157   ┌── HA-GROUP-2 (QM2) ──────────────────────────────┐  │
+  │   │                 │ ──────────────► │  mq-node-4  :9157  (Active QM2)          ✅ up    │  │
+  │   │                 │ - - - - - - - ► │  mq-node-5  :9157  (Replica)             ❌ down  │  │
+  │   │                 │ - - - - - - - ► │  mq-node-6  :9157  (Replica)             ❌ down  │  │
+  │   │                 │                 └──────────────────────────────────────────────────┘  │
+  │   │                 │  scrape :9157   ┌──────────────────────────────────────────────────┐  │
+  │   │                 │ ──────────────► │  mq-exporter-qm2 :9157 (QM2 per-queue depth) ✅   │  │
+  │   │                 │                 │  MQ client → follows QM2's Active node            │  │
   │   └────────┬────────┘                 └──────────────────────────────────────────────────┘  │
   │            │ scrape host.containers.internal:8080 /q/metrics                                │
   └────────────┼────────────────────────────────────────────────────────────────────────────────┘
@@ -144,6 +153,39 @@ failover. So a single scrape target covers the whole HA group:
 > reply model queue) is already in [`config.auth.mqsc`](mq-native-ha/config/config.auth.mqsc).
 > Without `+dsp` the exporter connects and emits qmgr metrics but **no**
 > `ibmmq_queue_*` series, logging `AMQ8245W` on the queue manager.
+
+### Uniform Cluster — one exporter per HA group
+
+An exporter connects to exactly one `queueManager`, so the
+[Uniform Cluster](native-ha-with-uniform-cluster.md) setup (QM1 = nodes 1–3,
+QM2 = nodes 4–6) needs **two** exporter containers, each with its own config:
+
+| HA group | Config | connName | Container | Host port |
+|---|---|---|---|---|
+| QM1 | [`mq_prometheus.yaml`](mq-native-ha/config/mq_prometheus.yaml) | nodes 1–3 | `mq-exporter` | `9257` |
+| QM2 | [`mq_prometheus.qm2.yaml`](mq-native-ha/config/mq_prometheus.qm2.yaml) | nodes 4–6 | `mq-exporter-qm2` | `9258` |
+
+The QM2 grants live in [`config.cluster.mqsc`](mq-native-ha/config/config.cluster.mqsc)
+(same monitoring block as `config.auth.mqsc`). Start the second exporter and add
+its scrape job:
+
+```bash
+podman run --platform=linux/amd64 -d --name mq-exporter-qm2 --network mq-ha-net \
+  -p 9258:9157 \
+  -v ./mq-native-ha/config/mq_prometheus.qm2.yaml:/opt/config/mq_prometheus.yaml:ro \
+  quay.io/voravitl/mq-prometheus:latest
+```
+
+```yaml
+  - job_name: 'mq-exporter-qm2'
+    static_configs:
+      - targets: ['mq-exporter-qm2:9157']   # internal port; host-mapped to 9258
+    metrics_path: /metrics
+    scheme: http
+```
+
+Both exporters share the single `prometheus.yaml` — just two jobs. Queue series
+are distinguished by the `qmgr` label (`QM1` / `QM2`).
 
 ## Setup
 

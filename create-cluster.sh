@@ -4,6 +4,10 @@ do
  podman stop mq-node-$i
  podman rm -f mq-node-$i
 done
+for e in mq-exporter mq-exporter-qm2;
+do
+ podman stop $e && podman rm -f $e
+done
 for i in mq-node-1-data mq-node-2-data mq-node-3-data mq-node-4-data mq-node-5-data mq-node-6-data; do
   podman volume exists $i && podman volume rm $i
   podman volume create $i
@@ -65,3 +69,20 @@ sleep 60
 podman exec mq-node-1 bash -c "echo 'display clusqmgr(*)' | runmqsc QM1"
 sleep 60
 podman exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
+
+# Per-queue metrics (e.g. ibmmq_queue_depth) — one exporter per HA group, each
+# following its own active node. Built once with obs-app/etc/build-mq-exporter.sh.
+EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
+echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
+podman run --platform=linux/amd64 -d \
+  --name mq-exporter \
+  --network mq-ha-net \
+  -p 9257:9157 \
+  -v ./mq-native-ha/config/mq_prometheus.yaml:/opt/config/mq_prometheus.yaml:ro \
+  "$EXPORTER_IMAGE"
+podman run --platform=linux/amd64 -d \
+  --name mq-exporter-qm2 \
+  --network mq-ha-net \
+  -p 9258:9157 \
+  -v ./mq-native-ha/config/mq_prometheus.qm2.yaml:/opt/config/mq_prometheus.yaml:ro \
+  "$EXPORTER_IMAGE"
