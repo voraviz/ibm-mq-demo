@@ -75,7 +75,7 @@ podman exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
 EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
 echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
 podman run --platform=linux/amd64 -d \
-  --name mq-exporter \
+  --name mq-exporter-qm1 \
   --network mq-ha-net \
   -p 9257:9157 \
   -v ./mq-native-ha/config/mq_prometheus.qm1.yaml:/opt/config/mq_prometheus.yaml:ro \

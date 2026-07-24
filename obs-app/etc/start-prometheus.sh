@@ -12,7 +12,7 @@ podman run --name prometheus \
   -p 9090:9090 \
   -e TZ=Asia/Bangkok \
   -d prom/prometheus:latest \
-  "--config.file=/etc/prometheus/prometheus.yaml"
+  "--config.file=/etc/prometheus/prometheus.cluster.yaml"
 
 echo ""
 echo "Prometheus started:"
