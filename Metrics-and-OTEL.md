@@ -123,7 +123,7 @@ bash obs-app/etc/build-mq-exporter.sh    # builds quay.io/voravitl/mq-prometheus
 ```
 
 `create-nativeha.sh` then starts it as the `mq-exporter` container (host `:9257`,
-container-internal `:9157`), configured by [`mq_prometheus.yaml`](mq-native-ha/config/mq_prometheus.yaml).
+container-internal `:9157`), configured by [`mq_prometheus.yaml`](mq-native-ha/config/mq_prometheus.qm1.yaml).
 
 **One target, not per-node.** Unlike the built-in exporter, this one connects as
 an MQ **client** over a multi-node `connName` and follows the Active node across

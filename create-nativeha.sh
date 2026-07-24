@@ -55,5 +55,5 @@ podman run --platform=linux/amd64 -d \
   --name mq-exporter \
   --network mq-ha-net \
   -p 9257:9157 \
-  -v ./mq-native-ha/config/mq_prometheus.yaml:/opt/config/mq_prometheus.yaml:ro \
+  -v ./mq-native-ha/config/mq_prometheus.qm1.yaml:/opt/config/mq_prometheus.yaml:ro \
   "$EXPORTER_IMAGE"
