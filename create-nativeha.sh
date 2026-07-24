@@ -1,9 +1,10 @@
 #!/bin/bash
-podman stop -a;podman rm -a -f
 for i in mq-node-1-data mq-node-2-data mq-node-3-data; do
+  podman stop $i && podman rm -f $i 
   podman volume exists $i && podman volume rm $i
   podman volume create $i
 done
+podman stop mq-prometheus && podman rm -f mq-prometheus
 #TAG=9.4.0.25-r1-amd64
 TAG=10.0.0.0-r1-amd64
 CONFIG=config.auth.mqsc
