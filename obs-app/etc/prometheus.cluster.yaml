@@ -16,7 +16,7 @@ scrape_configs:
   # is on mq-ha-net so it uses the internal port.
   - job_name: 'mq-exporter-qm1'
     static_configs:
-      - targets: ['mq-exporter:9157']
+      - targets: ['mq-exporter-qm1:9157']
     metrics_path: /metrics
     scheme: http
 
@@ -45,7 +45,7 @@ scrape_configs:
 
   - job_name: 'mq-exporter-qm2'
     static_configs:
-      - targets: ['mq-exporter:9158']
+      - targets: ['mq-exporter-qm2:9158']
     metrics_path: /metrics
     scheme: http
 
