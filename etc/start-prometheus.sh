@@ -1,7 +1,7 @@
 #!/bin/bash
-# Start Prometheus scraping the obs-app API and IBM MQ.
+# Start Prometheus scraping the all-in-one app and IBM MQ.
 # Run from the repository root:
-#   bash obs-app/etc/start-prometheus.sh
+#   bash etc/start-prometheus.sh
 
 set -e
 

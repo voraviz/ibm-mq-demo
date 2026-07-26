@@ -1,7 +1,7 @@
 #!/bin/bash
-# Start the observability stack for obs-app.
+# Start the observability stack (Jaeger for OTLP trace ingestion).
 # Run this script from the repository root:
-#   bash obs-app/etc/start-obs-stack.sh
+#   bash etc/start-jaeger.sh
 
 set -e
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start Grafana pre-configured to use Prometheus as its data source.
 # Run from the repository root:
-#   bash obs-app/etc/start-grafana.sh
+#   bash etc/start-grafana.sh
 
 set -e
 

@@ -19,10 +19,7 @@ ibm-mq-demo/
 ├── api-app-go/           # Standalone Go REST API backend
 ├── ui-app/               # Vue 3 + Vite frontend (pairs with api-app-go)
 ├── api-app/              # Quarkus REST API microservice (Java)
-├── obs-app/              # Observability variant — Prometheus + OTEL tracing
-│   ├── api/              #   Quarkus API with quarkus-opentelemetry
-│   ├── ui/               #   Vue 3 + Vite frontend
-│   └── etc/              #   OTEL Collector config + startup script
+├── etc/                  # Prometheus/Grafana/Jaeger configs + startup scripts
 ├── native-ha.md                        # Native HA setup and failover walkthrough
 ├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
 ├── ccdt/                               # CCDT JSON files (nativeha + cluster)
