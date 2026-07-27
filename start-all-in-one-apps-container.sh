@@ -1,6 +1,4 @@
 #!/bin/bash
-set -e
-
 if [ -n "${CONTAINER_ENGINE:-}" ]; then
     "$CONTAINER_ENGINE" info >/dev/null
 else
@@ -24,9 +22,9 @@ else
 fi
 
 QUARKUS_HTTP_PORT=9190
-APP_INSTANCE_COUNT=${APP_INSTANCE_COUNT:-10}
+APP_INSTANCE_COUNT=${APP_INSTANCE_COUNT:-6}
 MAX_PORT=$(expr "$QUARKUS_HTTP_PORT" + "$APP_INSTANCE_COUNT")
-APP_IMAGE=${APP_IMAGE:-localhost/ibm-mq-demo-app:local}
+APP_IMAGE=${APP_IMAGE:-quay.io/voravitl/simple-mq-app:multi-arch}
 APP_NETWORK=${APP_NETWORK:-mq-ha-net}
 
 echo "Using application image: $APP_IMAGE"
@@ -42,7 +40,7 @@ do
     echo "Start all-in-one-app with port $QUARKUS_HTTP_PORT"
     "$CONTAINER_ENGINE" run --name all-in-one-$QUARKUS_HTTP_PORT \
            --detach \
-           --memory 500m \
+           --memory 300m \
            --network "$APP_NETWORK" \
            -v "$CCDT_FILE":/config/ccdt.json:ro \
            -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
@@ -50,8 +48,7 @@ do
            -e IBM_MQ_QUEUE_MANAGER="*UNIQA" \
            -p $QUARKUS_HTTP_PORT:8080 \
            "$APP_IMAGE"
-    set +x
-    sleep 5
+    sleep 15
     echo "Send message to localhost:$QUARKUS_HTTP_PORT"
     COUNT=0
     while [ $COUNT -lt 10 ];
