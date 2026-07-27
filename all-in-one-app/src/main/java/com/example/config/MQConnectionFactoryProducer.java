@@ -64,6 +64,10 @@ public class MQConnectionFactoryProducer {
      * the caller so each factory can choose its own policy.
      */
     private void applyConnectionConfig(MQConnectionFactory factory) throws JMSException {
+        // Set client mode before the CCDT. Without this, the MQ client can
+        // validate CCDTURL as though this were a bindings-mode connection.
+        factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
+
         String ccdtUrl = config.ccdtUrl().filter(s -> !s.isBlank()).orElse(null);
         if (ccdtUrl != null) {
             factory.setStringProperty(WMQConstants.WMQ_CCDTURL, ccdtUrl);
@@ -78,8 +82,6 @@ public class MQConnectionFactoryProducer {
         }
 
         factory.setQueueManager(config.queueManager());
-        // factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
-        factory.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
         factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());

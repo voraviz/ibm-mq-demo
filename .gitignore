@@ -1,0 +1,6 @@
+*.idea
+*/target
+.vscode
+*node_modules
+logs
+*mqjms.log*

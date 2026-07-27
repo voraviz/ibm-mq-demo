@@ -18,6 +18,10 @@ public interface MQConfig {
     @WithName("client-reconnect-timeout")
     int clientReconnectTimeout();
 
+    @WithName("consumer-pulse-interval")
+    @WithDefault("30")
+    int consumerPulseInterval();
+
     @WithDefault("")
     String channel();
 
