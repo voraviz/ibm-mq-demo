@@ -1,7 +1,7 @@
 #!/bin/sh
 CONTAINER_NAME=quay.io/voravitl/simple-mq-app
 PLATFORM=linux/amd64,linux/arm64
-TAG=multi-arch #otel,latest,hi
+TAG=${1:-multi-arch} #otel,latest,hi — pass as first arg to override
 DOCKERFILE=jvm-runtime #jvm,jvm-runtime,hummingbird
 IMAGE=$CONTAINER_NAME:$TAG
 CONTAINER_RUNTIME=podman
@@ -17,7 +17,17 @@ then
 fi
 $CONTAINER_RUNTIME manifest create $IMAGE 
 echo "Build with Dockerfile.$DOCKERFILE tag $TAG"
-mvn clean package -DskipTests=true
+MVN_PROFILE=""
+if [ "$TAG" = "otel" ];
+then
+   MVN_PROFILE="-Dquarkus.profile=otel"
+fi
+mvn clean package -DskipTests=true $MVN_PROFILE
+if [ $? -ne 0 ];
+then
+   echo "Maven build failed, aborting"
+   exit 1
+fi
 $CONTAINER_RUNTIME build --platform $PLATFORM  --manifest \
 $IMAGE -f src/main/docker/Dockerfile.$DOCKERFILE  .
 $CONTAINER_RUNTIME manifest push $IMAGE

@@ -83,10 +83,10 @@
     </dependency>
 
     <!-- OpenTelemetry -->
-    <!-- <dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-opentelemetry</artifactId>
-    </dependency> -->
+    </dependency>
 
     <!-- Micrometer OTLP registry 
     <dependency>
