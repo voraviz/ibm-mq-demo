@@ -89,9 +89,15 @@ public class MQConsumer {
                     }
                     continue; // transient (mid-reconnect) — re-check interrupt and loop
                 }
-                jakarta.jms.Message msg = consumer.receive(500);
+                // A continuously blocking receive can keep a uniform-cluster
+                // application instance protected as IMMREASN(INTRANS). A
+                // periodic non-blocking receive gives the MQ client an MQ call
+                // on which to process balancing redirects, while the interval
+                // leaves a MOVABLE window after BALTMOUT expires.
+                jakarta.jms.Message msg = consumer.receiveNoWait();
                 if (msg == null) {
-                    continue; // timeout — check interrupt and loop
+                    sleepUntilNextPulse();
+                    continue;
                 }
                 if (msg instanceof TextMessage textMsg) {
                     String text = textMsg.getText();
@@ -116,6 +122,14 @@ public class MQConsumer {
                 // leave the consumer silently dead while isRunning() still reports true.
                 LOG.error("Unexpected error in MQ consumer loop — continuing", e);
             }
+        }
+    }
+
+    private void sleepUntilNextPulse() {
+        try {
+            Thread.sleep(config.consumerPulseInterval() * 1000L);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
     }
 

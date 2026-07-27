@@ -1,17 +1,54 @@
 #!/bin/bash
+set -e
+
+if [ -n "${CONTAINER_ENGINE:-}" ]; then
+  if ! command -v "$CONTAINER_ENGINE" >/dev/null 2>&1 || ! "$CONTAINER_ENGINE" info >/dev/null 2>&1; then
+    echo "CONTAINER_ENGINE '$CONTAINER_ENGINE' is not available or its engine is not running." >&2
+    exit 1
+  fi
+else
+  for candidate in docker podman; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" info >/dev/null 2>&1; then
+      CONTAINER_ENGINE="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "${CONTAINER_ENGINE:-}" ]; then
+  echo "A running Docker or Podman engine is required." >&2
+  exit 1
+fi
+
+echo "Using container engine: $CONTAINER_ENGINE"
+
+if [ "$CONTAINER_ENGINE" = "docker" ]; then
+  MQ_ADMIN_PASSWORD=${MQ_ADMIN_PASSWORD:-passw0rd}
+  MQ_APP_PASSWORD=${MQ_APP_PASSWORD:-passw0rd}
+  MQ_CREDENTIAL_ARGS=(
+    -e "MQ_ADMIN_PASSWORD=$MQ_ADMIN_PASSWORD"
+    -e "MQ_APP_PASSWORD=$MQ_APP_PASSWORD"
+  )
+else
+  MQ_CREDENTIAL_ARGS=(--secret mqAdminPassword --secret mqAppPassword)
+fi
+
 for i in 1 2 3 4 5 6;
 do
- podman stop mq-node-$i
- podman rm -f mq-node-$i
+ "$CONTAINER_ENGINE" rm -f mq-node-$i 2>/dev/null || true
 done
 for e in mq-exporter-qm1 mq-exporter-qm2;
 do
- podman stop $e && podman rm -f $e
+ "$CONTAINER_ENGINE" rm -f "$e" 2>/dev/null || true
 done
 for i in mq-node-1-data mq-node-2-data mq-node-3-data mq-node-4-data mq-node-5-data mq-node-6-data; do
-  podman volume exists $i && podman volume rm $i
-  podman volume create $i
+  "$CONTAINER_ENGINE" volume inspect "$i" >/dev/null 2>&1 && "$CONTAINER_ENGINE" volume rm "$i"
+  "$CONTAINER_ENGINE" volume create "$i"
 done
+
+"$CONTAINER_ENGINE" network inspect mq-ha-net >/dev/null 2>&1 ||
+  "$CONTAINER_ENGINE" network create mq-ha-net >/dev/null
+
 TAG=10.0.0.0-r1-amd64
 MQ_PORT=1414
 MQ_PROMETHEUS_PORT=9157
@@ -25,8 +62,8 @@ do
     QUEUE_MANAGER=QM2
   fi
   echo "Creating Node $i ......"
-  podman run -d \
-  --secret mqAdminPassword --secret mqAppPassword \
+  "$CONTAINER_ENGINE" run -d \
+  "${MQ_CREDENTIAL_ARGS[@]}" \
   --name mq-node-$i \
   --platform linux/amd64 \
   --network mq-ha-net \
@@ -49,38 +86,38 @@ do
   MQ_CONSOLE_PORT=$(expr $MQ_CONSOLE_PORT + 1 )
 done
 sleep 60
-clear
-podman ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
+clear 2>/dev/null || true
+"$CONTAINER_ENGINE" ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
 sleep 10
-clear
+clear 2>/dev/null || true
 echo "Wait for QM1 Native HA setting..."
 sleep 60
-QM1_ACTIVE_NODE=$(podman exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+QM1_ACTIVE_NODE=$("$CONTAINER_ENGINE" exec mq-node-1 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
 echo "QM1 Active on: $QM1_ACTIVE_NODE"
-clear
+clear 2>/dev/null || true
 echo "Wait for QM2 Native HA setting..."
 sleep 60
-QM2_ACTIVE_NODE=$(podman exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
+QM2_ACTIVE_NODE=$("$CONTAINER_ENGINE" exec mq-node-4 dspmq -o nativeha -x | grep "ROLE(Active)" | grep -v QMNAME| awk '{print $3}'| sed -r 's/^[^(]*\(([^)]+)\).*/\1/')
 echo "QM2 Active on: $QM2_ACTIVE_NODE"
 sleep 10
-clear
+clear 2>/dev/null || true
 echo "Wait for cluster setup..."
 sleep 60
-podman exec mq-node-1 bash -c "echo 'display clusqmgr(*)' | runmqsc QM1"
+"$CONTAINER_ENGINE" exec mq-node-1 bash -c "echo 'display clusqmgr(*)' | runmqsc QM1"
 sleep 60
-podman exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
+"$CONTAINER_ENGINE" exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
 
 # Per-queue metrics (e.g. ibmmq_queue_depth) — one exporter per HA group, each
 # following its own active node. Built once with etc/build-mq-exporter.sh.
 EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
 echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
-podman run --platform=linux/amd64 -d \
+"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
   --name mq-exporter-qm1 \
   --network mq-ha-net \
   -p 9257:9157 \
   -v ./mq-native-ha/config/mq_prometheus.qm1.yaml:/opt/config/mq_prometheus.yaml:ro \
   "$EXPORTER_IMAGE"
-podman run --platform=linux/amd64 -d \
+"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
   --name mq-exporter-qm2 \
   --network mq-ha-net \
   -p 9258:9157 \

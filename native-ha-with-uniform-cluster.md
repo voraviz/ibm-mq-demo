@@ -79,6 +79,12 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
 ./create-cluster.sh
 ```
 
+The script prefers a running Docker engine, then Podman. Override detection with
+`CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman`. Podman uses the existing
+`mqAdminPassword` and `mqAppPassword` secrets. Docker uses the disposable-demo
+defaults `passw0rd`, which can be overridden with `MQ_ADMIN_PASSWORD` and
+`MQ_APP_PASSWORD`.
+
 What the script does, in order:
 
 1. **Stops and removes** any existing `mq-node-1` … `mq-node-6` containers
@@ -381,8 +387,11 @@ Open [http://localhost:8080](http://localhost:8080) in a browser.
 
 **Run as a container** — pull the published image
 [`quay.io/voravitl/simple-mq-app`](https://quay.io/repository/voravitl/simple-mq-app) and mount the
-container CCDT [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json), which uses
-`host.containers.internal` so the container can reach the MQ ports published on the host:
+CCDT for the selected engine. Podman uses
+[`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json) with
+`host.containers.internal`. Docker uses
+[`ccdt/ccdt.cluster.docker.json`](ccdt/ccdt.cluster.docker.json), which resolves
+the six MQ container names directly on `mq-ha-net`:
 
 ```bash
 podman run -p 8080:8080 \
@@ -392,6 +401,20 @@ podman run -p 8080:8080 \
   -e IBM_MQ_APPLICATION_NAME="jack" \
   quay.io/voravitl/simple-mq-app:latest
 ```
+
+```bash
+docker run -p 8080:8080 --network mq-ha-net \
+  -v ./ccdt/ccdt.cluster.docker.json:/config/ccdt.json:ro \
+  -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
+  -e IBM_MQ_QUEUE_MANAGER="*UNIQA" \
+  -e IBM_MQ_APPLICATION_NAME="jack" \
+  quay.io/voravitl/simple-mq-app:latest
+```
+
+The Java consumer uses a periodic nonblocking receive rather than a continuous
+blocking receive. `ibm.mq.consumer-pulse-interval=30` leaves a movable window
+after the demo queue managers' `BALTMOUT(10)` expires while still giving the MQ
+client regular calls on which to process balancing redirects.
 
 **Application log:**
 
@@ -613,10 +636,17 @@ The `start-go-lang-apps.sh` and `start-all-in-one-apps.sh` scripts:
 - Write logs to the `logs/` directory
 
 [`start-all-in-one-apps-container.sh`](start-all-in-one-apps-container.sh) does the same put/consume
-test, but each instance runs in its own container (capped at 500 MB) connecting via the container
-CCDT [`ccdt/ccdt.cluster.container.json`](ccdt/ccdt.cluster.container.json)
-(`host.containers.internal`), `IBM_MQ_QUEUE_MANAGER=*UNIQA`, and application tag `jack` — so it shows
-up under the same `jack` tag in `check-app-balancing-status.sh`.
+test, but each instance runs in its own container (capped at 500 MB). It detects
+Docker or Podman and selects the matching CCDT, sets
+`IBM_MQ_QUEUE_MANAGER=*UNIQA`, and uses application tag `jack` — so it shows up
+under the same `jack` tag in `check-app-balancing-status.sh`. Set
+`APP_INSTANCE_COUNT=5` to mirror a five-replica deployment.
+
+Each Quarkus container can contribute two long-lived JMS application instances:
+one for the outbound SmallRye JMS connector after its first send and one after
+the consumer is started. Therefore five containers can correctly appear as
+`COUNT(10)` in `APSTATUS`; `CONNS(2)` is the pair of underlying MQ connections
+grouped into each one of those JMS application instances.
 
 **3. Check App Status**
 
