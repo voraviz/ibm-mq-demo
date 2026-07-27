@@ -4,7 +4,7 @@ do
  podman stop mq-node-$i
  podman rm -f mq-node-$i
 done
-for e in mq-exporter mq-exporter-qm2;
+for e in mq-exporter-qm1 mq-exporter-qm2;
 do
  podman stop $e && podman rm -f $e
 done
@@ -71,7 +71,7 @@ sleep 60
 podman exec mq-node-4 bash -c "echo 'display clusqmgr(*)' | runmqsc QM2"
 
 # Per-queue metrics (e.g. ibmmq_queue_depth) — one exporter per HA group, each
-# following its own active node. Built once with obs-app/etc/build-mq-exporter.sh.
+# following its own active node. Built once with etc/build-mq-exporter.sh.
 EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
 echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
 podman run --platform=linux/amd64 -d \

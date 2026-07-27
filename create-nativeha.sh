@@ -4,7 +4,7 @@ for i in mq-node-1-data mq-node-2-data mq-node-3-data; do
   podman volume exists $i && podman volume rm $i
   podman volume create $i
 done
-podman stop mq-prometheus && podman rm -f mq-prometheus
+podman stop mq-prometheus-qm1 && podman rm -f mq-prometheus-qm1
 #TAG=9.4.0.25-r1-amd64
 TAG=10.0.0.0-r1-amd64
 CONFIG=config.auth.mqsc
@@ -48,7 +48,7 @@ echo "QM1 Active on: $QM1_ACTIVE_NODE"
 
 # Per-queue metrics (e.g. ibmmq_queue_depth) — the MQ container's built-in
 # metrics only publish qmgr-level $SYS stats, so run the standalone exporter.
-# IBM publishes no prebuilt image; build it once with obs-app/etc/build-mq-exporter.sh.
+# IBM publishes no prebuilt image; build it once with etc/build-mq-exporter.sh.
 EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
 echo "Starting MQ metrics exporter (queue depth etc.) on :9257 ..."
 podman run --platform=linux/amd64 -d \
