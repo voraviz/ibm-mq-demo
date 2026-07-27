@@ -26,7 +26,16 @@ fi
 QUARKUS_HTTP_PORT=9190
 APP_INSTANCE_COUNT=${APP_INSTANCE_COUNT:-10}
 MAX_PORT=$(expr "$QUARKUS_HTTP_PORT" + "$APP_INSTANCE_COUNT")
+APP_IMAGE=${APP_IMAGE:-localhost/ibm-mq-demo-app:local}
+APP_NETWORK=${APP_NETWORK:-mq-ha-net}
 
+echo "Using application image: $APP_IMAGE"
+echo "Using container network: $APP_NETWORK"
+
+if ! "$CONTAINER_ENGINE" network inspect "$APP_NETWORK" >/dev/null 2>&1; then
+    echo "Container network '$APP_NETWORK' does not exist. Start the MQ cluster first." >&2
+    exit 1
+fi
 
 while [ $QUARKUS_HTTP_PORT -lt $MAX_PORT ]
 do
@@ -34,12 +43,13 @@ do
     "$CONTAINER_ENGINE" run --name all-in-one-$QUARKUS_HTTP_PORT \
            --detach \
            --memory 500m \
+           --network "$APP_NETWORK" \
            -v "$CCDT_FILE":/config/ccdt.json:ro \
            -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
            -e IBM_MQ_APPLICATION_NAME="jack" \
            -e IBM_MQ_QUEUE_MANAGER="*UNIQA" \
            -p $QUARKUS_HTTP_PORT:8080 \
-           quay.io/voravitl/simple-mq-app:latest
+           "$APP_IMAGE"
     set +x
     sleep 5
     echo "Send message to localhost:$QUARKUS_HTTP_PORT"

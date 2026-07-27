@@ -1,6 +1,7 @@
 #!/bin/bash
 # Original: https://github.com/ibm-messaging/mq-uniform-clusters/blob/master/demo/M1MacDocker/connections.sh
 # Usage: ./check-app-balancing-status.sh <appltag>
+# Set SHOW_LOCAL=1 to include per-instance MOVABLE and IMMREASN details.
 if [ -n "${CONTAINER_ENGINE:-}" ]; then
     "$CONTAINER_ENGINE" info >/dev/null
 else
@@ -24,6 +25,7 @@ fi
 
 # The application tag to monitor, supplied as the first argument.
 APPLTAG="$1"
+SHOW_LOCAL=${SHOW_LOCAL:-0}
 
 # Helper: resolve which NativeHA node is currently Active for a given seed node.
 get_active_node() {
@@ -55,15 +57,23 @@ while true; do
     clear
     echo "=== Cluster summary ==="
     "$CONTAINER_ENGINE" exec "$QM1_ACTIVE_NODE" \
-        bash -c "printf '%s\n' \"DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)\" \"DISPLAY APSTATUS('$APPLTAG') TYPE(QMGR)\" | runmqsc QM1"
-    echo "=== QM1 local eligibility ==="
-    "$CONTAINER_ENGINE" exec "$QM1_ACTIVE_NODE" \
-        bash -c "echo \"DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) ALL\" | runmqsc QM1"
-    echo "=== QM2 local eligibility ==="
-    "$CONTAINER_ENGINE" exec "$QM2_ACTIVE_NODE" \
-        bash -c "echo \"DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) ALL\" | runmqsc QM2"
+        bash -c "printf '%s\n' \"DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)\" \"DISPLAY APSTATUS('$APPLTAG') TYPE(QMGR)\" | runmqsc QM1" \
+        | grep -E "APPLNAME\\(|COUNT\\(|BALANCED\\(|BALSTATE\\(|QMNAME\\("
+
+    if [ "$SHOW_LOCAL" = "1" ]; then
+        echo "=== QM1 local eligibility ==="
+        "$CONTAINER_ENGINE" exec "$QM1_ACTIVE_NODE" \
+            bash -c "echo \"DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) MOVABLE IMMREASN\" | runmqsc QM1" \
+            | grep -E "MOVABLE\\(|IMMREASN\\("
+        echo "=== QM2 local eligibility ==="
+        "$CONTAINER_ENGINE" exec "$QM2_ACTIVE_NODE" \
+            bash -c "echo \"DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) MOVABLE IMMREASN\" | runmqsc QM2" \
+            | grep -E "MOVABLE\\(|IMMREASN\\("
+    fi
+
     echo "=== Connection counts ==="
     echo "QM1 Active on: $QM1_ACTIVE_NODE with $QM1_CONN connections"
     echo "QM2 Active on: $QM2_ACTIVE_NODE with $QM2_CONN connections"
+    echo "Set SHOW_LOCAL=1 to display MOVABLE and IMMREASN for each instance."
     sleep 5
 done
