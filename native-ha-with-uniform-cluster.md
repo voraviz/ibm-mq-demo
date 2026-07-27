@@ -24,6 +24,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
   - [Application Load Balancing](#application-load-balancing)
+  - [References](#references)
 
 ---
 
@@ -412,9 +413,19 @@ docker run -p 8080:8080 --network mq-ha-net \
 ```
 
 The Java consumer uses a periodic nonblocking receive rather than a continuous
-blocking receive. `ibm.mq.consumer-pulse-interval=30` leaves a movable window
-after the demo queue managers' `BALTMOUT(10)` expires while still giving the MQ
-client regular calls on which to process balancing redirects.
+blocking receive. `ibm.mq.consumer-pulse-interval=15` keeps each instance in a
+movable state long enough for the queue manager's [`BALTIMEOUT`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout)
+(balance timeout, default 10s) to complete a rebalance, while still giving the
+MQ client regular calls on which to process balancing redirects. The interval
+must stay above `BALTIMEOUT`; 15s (~1.5×) leaves margin for reliable balancing
+while capping the worst-case idle message-pickup latency at ~15s. Lower
+`BALTIMEOUT` on the queue manager if you need a shorter interval.
+
+Check balancing state with [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms):
+
+```bash
+echo "DIS APSTATUS('<appltag>') TYPE(APPL)" | runmqsc <qmgr>   # watch BALANCED / MOVCOUNT
+```
 
 **Application log:**
 
@@ -706,3 +717,15 @@ It transitions to `YES` once all 10 application instances have settled evenly ac
       bash -c "echo \"dis conn(*) where(appltag eq '$APPLTAG') conntag\" | runmqsc QM1" \
       | grep -c "APPLTAG")
   ```
+
+## References
+
+IBM MQ 9.4.x documentation:
+- [CCDT (Client Channel Definition Table)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=tables-configuring-json-format-ccdt) — JSON format used by the client apps in this demo.
+<!-- - [Native HA](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=multiplatforms-native-ha) — Raft-based high availability groups. -->
+<!-- - [Uniform clusters](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-uniform) — automatic client connection balancing across queue managers. -->
+- [Automatic application balancing](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-automatic-application-balancing) — how connections are moved to keep instances even.
+- [`BALTIMEOUT` (balance timeout)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout) — grace period the QM waits for an instance to become movable; default 10s. The consumer's `ibm.mq.consumer-pulse-interval` must stay above this.
+- [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms) — inspect `BALANCED` / `MOVCOUNT` per application.
+<!-- - [`AutoCluster` stanza (qm.ini)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=file-autocluster-stanza-qmini) — the uniform-cluster configuration used in the node `qm.ini` files. -->
+
