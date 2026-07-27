@@ -427,6 +427,21 @@ Check balancing state with [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-
 echo "DIS APSTATUS('<appltag>') TYPE(APPL)" | runmqsc <qmgr>   # watch BALANCED / MOVCOUNT
 ```
 
+The pulse interval only solves the *movable-window* half of balancing. The other
+half is **reconnect**: the cluster rebalances by moving a connection to a
+different queue manager, which requires the any-QM `MQCNO_RECONNECT`.
+
+| Option | Reconnects to | Native HA | Uniform Cluster |
+|---|---|---|---|
+| `MQCNO_RECONNECT` | **any** QM in the CCDT / group | ✅ works | ✅ **required** |
+| `MQCNO_RECONNECT_Q_MGR` | the **same** QM only | ✅ works | ❌ blocks the move |
+| none / `MQCNO_RECONNECT_DISABLED` | — | ❌ manual reconnect only | ❌ not movable |
+
+`MQCNO_RECONNECT_Q_MGR` pins the client to its current queue manager, so the
+cluster can never move it — the instance shows as not movable. That is why the
+demo apps connect to `*UNIQA` with the any-QM `MQCNO_RECONNECT` (the JMS apps set
+`WMQ_CLIENT_RECONNECT` on the `ConnectionFactory`).
+
 **Application log:**
 
 - Use CCDT:

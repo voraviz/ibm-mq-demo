@@ -577,6 +577,19 @@ func connectOption(cfg *config.Config) jms20subset.MQOptions {
 
 In both apps `MQCNO_RECONNECT` (not `MQCNO_RECONNECT_Q_MGR`) allows reconnect within a Native HA group **and** across queue managers in a Uniform Cluster; `_Q_MGR` would block cross-QM balancing entirely.
 
+Reconnect must be enabled for automatic recovery; which flavor you pick matters:
+
+| Option | Reconnects to | Native HA | Uniform Cluster |
+|---|---|---|---|
+| `MQCNO_RECONNECT` | **any** QM in the CCDT / group | ✅ works | ✅ **required** |
+| `MQCNO_RECONNECT_Q_MGR` | the **same** QM only | ✅ works | ❌ blocks the move |
+| none / `MQCNO_RECONNECT_DISABLED` | — | ❌ manual reconnect only | ❌ not movable |
+
+- **Native HA:** either flavor works — after failover the *same* queue manager name is promoted onto a new active node, so even the same-QM variant reconnects successfully.
+- **Uniform Cluster:** balancing moves a connection to a *different* queue manager, so it needs the any-QM `MQCNO_RECONNECT`. `_Q_MGR` pins the client to its current QM and prevents the rebalance (the instance shows as not movable).
+
+> The JMS apps set the equivalent via `WMQ_CLIENT_RECONNECT` (any-QM) on the `ConnectionFactory` — see the [Two-layer reconnect model](#two-layer-reconnect-model).
+
 The `api-app-go-jms20` consumer poll loop ([`consumer.go`](api-app-go-jms20/mq/consumer.go)) mirrors the raw variant — a 500 ms receive timeout, `nil`/`nil` meaning "no message":
 
 ```go
