@@ -109,17 +109,17 @@ sleep 60
 
 # Per-queue metrics (e.g. ibmmq_queue_depth) — one exporter per HA group, each
 # following its own active node. Built once with etc/build-mq-exporter.sh.
-EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
-echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
-"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
-  --name mq-exporter-qm1 \
-  --network mq-ha-net \
-  -p 9257:9157 \
-  -v ./mq-native-ha/config/mq_prometheus.qm1.yaml:/opt/config/mq_prometheus.yaml:ro \
-  "$EXPORTER_IMAGE"
-"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
-  --name mq-exporter-qm2 \
-  --network mq-ha-net \
-  -p 9258:9157 \
-  -v ./mq-native-ha/config/mq_prometheus.qm2.yaml:/opt/config/mq_prometheus.yaml:ro \
-  "$EXPORTER_IMAGE"
+#EXPORTER_IMAGE=quay.io/voravitl/mq-prometheus:latest
+#echo "Starting MQ metrics exporters — QM1 on :9257, QM2 on :9258 ..."
+#"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
+#  --name mq-exporter-qm1 \
+#  --network mq-ha-net \
+#  -p 9257:9157 \
+#  -v ./mq-native-ha/config/mq_prometheus.qm1.yaml:/opt/config/mq_prometheus.yaml:ro \
+#  "$EXPORTER_IMAGE"
+#"$CONTAINER_ENGINE" run --platform=linux/amd64 -d \
+#  --name mq-exporter-qm2 \
+#  --network mq-ha-net \
+#  -p 9258:9157 \
+#  -v ./mq-native-ha/config/mq_prometheus.qm2.yaml:/opt/config/mq_prometheus.yaml:ro \
+#  "$EXPORTER_IMAGE"
