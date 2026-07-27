@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# Original: https://github.com/ibm-messaging/mq-uniform-clusters/blob/master/demo/M1MacDocker/connections.sh
 # Usage: ./check-app-balancing-status.sh <appltag>
 if [[ -z "$1" ]]; then
     echo "Usage: $0 <appltag>" >&2
