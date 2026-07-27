@@ -322,20 +322,22 @@ Two extensions are required in [`all-in-one-app/pom.xml`](all-in-one-app/pom.xml
 </dependency>
 ```
 
-#### application.properties
+#### Two builds via config profiles: OTEL off (default) and on
 
-Configuration in [`all-in-one-app/src/main/resources/application.properties`](all-in-one-app/src/main/resources/application.properties):
+`quarkus.otel.enabled` is a **build-time** property, so OTEL on/off is chosen at
+`mvn package` / `mvn quarkus:dev` time, not at launch. The app ships two builds
+through Quarkus [config profiles](https://quarkus.io/guides/config-reference#profiles):
+
+- **Default (no OTEL)** — [`application.properties`](all-in-one-app/src/main/resources/application.properties)
+  sets `quarkus.otel.enabled=false`.
+- **`otel` profile (OTEL on)** — [`application-otel.properties`](all-in-one-app/src/main/resources/application-otel.properties)
+  is layered on top of the base and flips OTEL on plus the exporter config.
 
 ```properties
-# ── OpenTelemetry ────────────────────────────────────────────────────────────
-# Enable the OTEL extension
+# application-otel.properties — only the keys that differ from the default build
+
+# Build-time: wire OpenTelemetry into this build
 quarkus.otel.enabled=true
-
-# OTEL metrics export disabled — Prometheus/Micrometer is used for metrics instead
-quarkus.otel.metrics.enabled=false
-
-# SDK active at runtime (set to true to disable tracing without rebuilding)
-quarkus.otel.sdk.disabled=false
 
 # Service name displayed in Jaeger
 quarkus.application.name=all-in-one
@@ -346,14 +348,25 @@ quarkus.otel.exporter.otlp.endpoint=http://localhost:4317
 # Optional: add an auth header if the collector requires it
 #quarkus.otel.exporter.otlp.headers=authorization=Bearer my_secret
 
-# Optional: enrich log lines with trace context fields
-#quarkus.log.console.format=%d{HH:mm:ss} %-5p traceId=%X{traceId}, parentId=%X{parentId}, spanId=%X{spanId}, sampled=%X{sampled} [%c{2.}] (%t) %s%e%n
+# Trace context fields in console logs
+quarkus.log.console.format=%d{HH:mm:ss} %-5p traceId=%X{traceId}, parentId=%X{parentId}, spanId=%X{spanId}, sampled=%X{sampled} [%c{2.}] (%t) %s%e%n
 ```
 
-> **Runtime toggle:** To disable tracing on a running instance without a rebuild, pass
-> `-Dquarkus.otel.sdk.disabled=true` on the JVM command line or set the environment variable
-> `QUARKUS_OTEL_SDK_DISABLED=true`. Set it back to `false` to re-enable.
->
+Build/run each version:
+
+```bash
+# No OTEL (default)
+mvn package                          # or: mvn quarkus:dev
+
+# With OTEL
+mvn package -Dquarkus.profile=otel   # or: mvn quarkus:dev -Dquarkus.profile=otel
+```
+
+> **Runtime knobs:** endpoint, headers, and `quarkus.otel.sdk.disabled` are *runtime*
+> properties — override them with `-D…` / env vars at launch without rebuilding. Only
+> `quarkus.otel.enabled` requires choosing the profile at build time. On an OTEL build,
+> pass `-Dquarkus.otel.sdk.disabled=true` (or `QUARKUS_OTEL_SDK_DISABLED=true`) to pause
+> tracing at runtime.
 
 Prebuild container is available at *quay.io/voravitl/simple-mq-app:otel*
 
