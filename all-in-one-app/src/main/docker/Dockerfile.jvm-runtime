@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/openjdk-25-runtime:1.24
+FROM registry.access.redhat.com/ubi9/openjdk-25-runtime:latest
 ENV LANGUAGE='en_US:en'
 USER root
 RUN  microdnf -y update  --setopt=install_weak_deps=0 --nodocs \
