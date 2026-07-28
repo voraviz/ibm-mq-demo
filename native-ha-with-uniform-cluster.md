@@ -676,6 +676,21 @@ the consumer is started. Therefore five containers can correctly appear as
 `COUNT(10)` in `APSTATUS`; `CONNS(2)` is the pair of underlying MQ connections
 grouped into each one of those JMS application instances.
 
+> **What is an HCONN?** Those "underlying MQ connections" are *connection handles*.
+> When any program connects to a queue manager it calls
+> [`MQCONN`/`MQCONNX`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=calls-mqconn-connect-queue-manager),
+> which returns an [`Hconn`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=fields-hconn-mqhconn)
+> of type `MQHCONN` — the handle it must then pass to every later call (`MQOPEN`,
+> `MQPUT`, `MQGET`, `MQCMIT`, `MQDISC`). One HCONN = one logical connection, and it is
+> the row unit that `DIS CONN(*)` reports.
+>
+> JMS builds on this: each JMS `Connection` is one HCONN and its `Session` is another,
+> so **one JMS Connection + Session = 2 HCONNs**. Each app opens two JMS Connections —
+> the SmallRye JMS producer and the `MQConsumer` — giving **4 HCONNs per app**. Six apps
+> therefore show `24` rows in `DIS CONN(*)`, while `APSTATUS COUNT` groups them into
+> `12` *application instances* (it counts JMS connections, not raw handles). Different
+> numbers, same connections — `DIS CONN` counts handles, `APSTATUS` counts instances.
+
 **3. Check App Status**
 
 `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections.
