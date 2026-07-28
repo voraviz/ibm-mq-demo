@@ -24,6 +24,8 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
     - [Scenario 1 — Single node failover within HA-GROUP-1](#scenario-1--single-node-failover-within-ha-group-1)
     - [Scenario 2 — Full HA-GROUP-1 loss (all 3 nodes stopped)](#scenario-2--full-ha-group-1-loss-all-3-nodes-stopped)
   - [Application Load Balancing](#application-load-balancing)
+    - [Monitoring Scripts](#monitoring-scripts)
+    - [Investigating Balancing Eligibility](#investigating-balancing-eligibility)
   - [References](#references)
 
 ---
@@ -412,14 +414,14 @@ docker run -p 8080:8080 --network mq-ha-net \
   quay.io/voravitl/simple-mq-app:latest
 ```
 
-The Java consumer uses a periodic nonblocking receive rather than a continuous
-blocking receive. `ibm.mq.consumer-pulse-interval=15` keeps each instance in a
-movable state long enough for the queue manager's [`BALTIMEOUT`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout)
-(balance timeout, default 10s) to complete a rebalance, while still giving the
-MQ client regular calls on which to process balancing redirects. The interval
-must stay above `BALTIMEOUT`; 15s (~1.5×) leaves margin for reliable balancing
-while capping the worst-case idle message-pickup latency at ~15s. Lower
-`BALTIMEOUT` on the queue manager if you need a shorter interval.
+The Java consumer uses an async JMS `MessageListener` rather than a blocking
+receive loop. The MQ JMS provider delivers messages on its own thread and the
+connection sits idle in a MOVABLE state between deliveries, so the queue
+manager's [`BALTIMEOUT`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout)
+(balance timeout, default 10s) always finds a movable window to complete a
+rebalance — no polling interval or pulse tuning is required. (A manual blocking
+`receive()` loop, by contrast, keeps the instance non-movable and needs a
+periodic-receive workaround to be balanced at all.)
 
 Check balancing state with [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms):
 
@@ -427,9 +429,9 @@ Check balancing state with [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-
 echo "DIS APSTATUS('<appltag>') TYPE(APPL)" | runmqsc <qmgr>   # watch BALANCED / MOVCOUNT
 ```
 
-The pulse interval only solves the *movable-window* half of balancing. The other
-half is **reconnect**: the cluster rebalances by moving a connection to a
-different queue manager, which requires the any-QM `MQCNO_RECONNECT`.
+The listener solves the *movable-window* half of balancing. The other half is
+**reconnect**: the cluster rebalances by moving a connection to a different
+queue manager, which requires the any-QM `MQCNO_RECONNECT`.
 
 | Option | Reconnects to | Native HA | Uniform Cluster |
 |---|---|---|---|
@@ -674,6 +676,21 @@ the consumer is started. Therefore five containers can correctly appear as
 `COUNT(10)` in `APSTATUS`; `CONNS(2)` is the pair of underlying MQ connections
 grouped into each one of those JMS application instances.
 
+> **What is an HCONN?** Those "underlying MQ connections" are *connection handles*.
+> When any program connects to a queue manager it calls
+> [`MQCONN`/`MQCONNX`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=calls-mqconn-connect-queue-manager),
+> which returns an [`Hconn`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=fields-hconn-mqhconn)
+> of type `MQHCONN` — the handle it must then pass to every later call (`MQOPEN`,
+> `MQPUT`, `MQGET`, `MQCMIT`, `MQDISC`). One HCONN = one logical connection, and it is
+> the row unit that `DIS CONN(*)` reports.
+>
+> JMS builds on this: each JMS `Connection` is one HCONN and its `Session` is another,
+> so **one JMS Connection + Session = 2 HCONNs**. Each app opens two JMS Connections —
+> the SmallRye JMS producer and the `MQConsumer` — giving **4 HCONNs per app**. Six apps
+> therefore show `24` rows in `DIS CONN(*)`, while `APSTATUS COUNT` groups them into
+> `12` *application instances* (it counts JMS connections, not raw handles). Different
+> numbers, same connections — `DIS CONN` counts handles, `APSTATUS` counts instances.
+
 **3. Check App Status**
 
 `BALANCED(NO)` is expected immediately after startup while the cluster is still distributing connections.
@@ -733,6 +750,97 @@ It transitions to `YES` once all 10 application instances have settled evenly ac
       | grep -c "APPLTAG")
   ```
 
+### Monitoring Scripts
+
+Three scripts poll `APSTATUS` and count connections in a loop (`clear` + `sleep`,
+Ctrl-C to stop). All resolve the **Active** Native HA instance per queue manager
+first, since a QM only accepts connections on its Active node. Pick by where MQ runs
+and whether you can reach both queue managers from one place:
+
+| Script | MQ runs as | Talks to | Use when |
+|---|---|---|---|
+| [`check-app-balancing-status.sh`](check-app-balancing-status.sh) | Docker/Podman containers | Both QMs (execs into each node) | Local container demo |
+| [`check-app-balancing-status-vm.sh`](check-app-balancing-status-vm.sh) | Native on a VM | Both QMs, local `runmqsc` (bindings) | One VM can reach both QMs |
+| [`check-app-balancing-status-vm-single.sh`](check-app-balancing-status-vm-single.sh) | Native on a VM | One QM only | ssh between VMs blocked — run on each MQ VM |
+
+```bash
+# Containers — appltag is the only argument
+./check-app-balancing-status.sh jack
+
+# VM, both QMs (defaults to QM1 QM2 if omitted); override poll interval
+INTERVAL=3 ./check-app-balancing-status-vm.sh keshi QM1 QM2
+
+# VM, single QM — run one per MQ VM (note arg order: qmgr first, then appltag)
+./check-app-balancing-status-vm-single.sh QM1 keshi
+```
+
+**`SHOW_LOCAL` environment variable** (all three scripts): by default each script
+prints the cluster summary (`COUNT`, `BALANCED`, `BALSTATE`) and connection counts.
+Set `SHOW_LOCAL=1` to also run `DISPLAY APSTATUS(...) TYPE(LOCAL) MOVABLE IMMREASN`
+on each QM and print the per-instance `MOVABLE` / `IMMREASN` — the eligibility detail
+used in [Investigating Balancing Eligibility](#investigating-balancing-eligibility)
+below.
+
+```bash
+SHOW_LOCAL=1 ./check-app-balancing-status.sh jack
+SHOW_LOCAL=1 ./check-app-balancing-status-vm.sh keshi QM1 QM2
+SHOW_LOCAL=1 ./check-app-balancing-status-vm-single.sh QM1 keshi
+```
+
+### Investigating Balancing Eligibility
+
+`BALANCED` reflects the cluster's view **over time**; `MOVABLE` / `IMMREASN` is an
+**instantaneous snapshot**. An instance showing `MOVABLE(NO)` right now does **not**
+mean it can never balance — the uniform cluster relocates instances at message /
+transaction boundaries, so a healthy cluster reaches an even split even while most
+instances read `MOVABLE(NO)` in any single snapshot.
+
+Real example — 16 instances fully balanced (`BALANCED(YES)`, 8 per queue manager)
+while 7 of 8 instances on QM2 were `MOVABLE(NO)` at that instant:
+
+```
+=== Cluster summary ===
+   APPLNAME(jack)  CLUSTER(UNIQA)  COUNT(16)  MOVCOUNT(11)  BALANCED(YES)
+   ACTIVE(YES)  COUNT(8)  MOVCOUNT(3)  BALSTATE(OK)  QMNAME(QM1)
+   ACTIVE(YES)  COUNT(8)  MOVCOUNT(8)  BALSTATE(OK)  QMNAME(QM2)
+=== QM2 local eligibility ===   (7 of 8 not movable, yet balanced)
+   IMMREASN(INTRANS)  MOVABLE(NO)    x7
+   IMMREASN(NONE)     MOVABLE(YES)   x1
+```
+
+So don't read a snapshot full of `MOVABLE(NO)` as "stuck" — check `BALANCED` and the
+per-QM `COUNT` instead. If connections really are pinned to one queue manager and
+never move, the cause is almost always the **cluster itself** (a queue manager not
+joined, wrong channel/CCDT), not the application.
+
+**Commands to investigate, from broad to specific:**
+
+```bash
+# 1. Cluster-wide: is it balanced? how many instances per QM?
+echo "DIS APSTATUS('jack') TYPE(APPL)" | runmqsc QM1
+
+# 2. Per-instance eligibility on one QM — why is each instance movable or not?
+echo "DIS APSTATUS('jack') TYPE(LOCAL) MOVABLE IMMREASN" | runmqsc QM1
+
+# 3. Which HCONNs hold an open unit of work (UOWSTATE ACTIVE = INTRANS)?
+echo "DIS CONN(*) WHERE(APPLTAG EQ 'jack') UOWSTATE CHANNEL CONNAME" | runmqsc QM1
+
+# 4. Which of those conns are consumers vs producers?
+#    MQOO_INPUT* = consumer, MQOO_OUTPUT = producer
+echo "DIS CONN(*) WHERE(APPLTAG EQ 'jack') TYPE(HANDLE) OBJNAME OPENOPTS" | runmqsc QM1
+
+# 5. Confirm the queue is really drained (idle) — no messages, none uncommitted
+echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM" | runmqsc QM1
+```
+
+**`IMMREASN` values seen in this demo:**
+
+| `IMMREASN` | `MOVABLE` | Meaning |
+|---|---|---|
+| `NONE` | `YES` | At a boundary, ready to move. |
+| `INTRANS` | `NO` | In a unit of work. The async JMS `MessageListener` keeps a syncpoint GET armed for the next delivery, so its consumer connection reads `INTRANS` **even when the queue is empty** (`CURDEPTH(0)`, `UNCOM(NO)`). This is normal and does **not** block balancing — the move happens at the next delivery boundary. |
+| `NOTRECONN` | `NO` | Reconnect disabled on that connection, so the cluster can never move it. In this demo these are the one-shot `/api/info` probe connections (their factory sets `WMQ_CLIENT_RECONNECT_DISABLED`); they sit out of balancing by design. |
+
 ## References
 
 IBM MQ 9.4.x documentation:
@@ -740,7 +848,7 @@ IBM MQ 9.4.x documentation:
 <!-- - [Native HA](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=multiplatforms-native-ha) — Raft-based high availability groups. -->
 <!-- - [Uniform clusters](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-uniform) — automatic client connection balancing across queue managers. -->
 - [Automatic application balancing](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-automatic-application-balancing) — how connections are moved to keep instances even.
-- [`BALTIMEOUT` (balance timeout)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout) — grace period the QM waits for an instance to become movable; default 10s. The consumer's `ibm.mq.consumer-pulse-interval` must stay above this.
+- [`BALTIMEOUT` (balance timeout)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout) — grace period the QM waits for an instance to become movable; default 10s.
 - [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms) — inspect `BALANCED` / `MOVCOUNT` per application.
 <!-- - [`AutoCluster` stanza (qm.ini)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=file-autocluster-stanza-qmini) — the uniform-cluster configuration used in the node `qm.ini` files. -->
 

@@ -8,14 +8,27 @@ import jakarta.inject.Inject;
 import jakarta.jms.Connection;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.JMSException;
+import jakarta.jms.Message;
 import jakarta.jms.MessageConsumer;
 import jakarta.jms.Queue;
 import jakarta.jms.Session;
 import jakarta.jms.TextMessage;
 import org.jboss.logging.Logger;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Async JMS consumer: the MQ JMS provider delivers messages to {@link #onMessage}
+ * on its own thread. Between deliveries the connection sits idle in a MOVABLE
+ * state, so a uniform cluster can rebalance it without any polling workaround —
+ * unlike a manual blocking-receive loop, this needs no pulse interval.
+ *
+ * Two-layer reconnect: Layer 1 is the client library's WMQ_CLIENT_RECONNECT
+ * (set on the ConnectionFactory), which absorbs most HA/cluster failovers
+ * transparently. Layer 2 is {@link #onException} — the fallback that rebuilds
+ * JMS resources when Layer 1 surfaces a connection error.
+ */
 @ApplicationScoped
 public class MQConsumer {
 
@@ -30,22 +43,24 @@ public class MQConsumer {
     @Inject
     MessageWebSocket webSocket;
 
-    // JMS resources — null when stopped
+    // JMS resources — null when stopped/reconnecting
     private volatile Connection      jmsConnection;
     private volatile Session         jmsSession;
     private volatile MessageConsumer jmsConsumer;
-    private volatile Thread          listenerThread;
-    private volatile boolean         closing = false;
+
+    private volatile boolean running = false; // intent: started and not stopped
+    private volatile boolean closing = false; // teardown in progress — suppress Layer-2 reconnect
+    private final AtomicBoolean reconnecting = new AtomicBoolean(false);
 
     private final AtomicLong receiveCounter = new AtomicLong(0);
 
     public synchronized void start() {
-        if (jmsConnection != null) {
+        if (running) {
             return; // already running
         }
         try {
             openJmsResources();
-            listenerThread = Thread.ofPlatform().name("mq-consumer").daemon(true).start(this::readLoop);
+            running = true;
             LOG.info("MQ consumer started — listening on queue: " + config.queue());
         } catch (JMSException e) {
             LOG.error("Failed to start MQ consumer", e);
@@ -54,15 +69,16 @@ public class MQConsumer {
     }
 
     public synchronized void stop() {
-        if (jmsConnection == null) {
+        if (!running) {
             return; // already stopped
         }
+        running = false;
         closeJmsResources();
         LOG.info("MQ consumer stopped");
     }
 
-    public synchronized boolean isRunning() {
-        return jmsConnection != null;
+    public boolean isRunning() {
+        return running;
     }
 
     public long getCount() {
@@ -71,7 +87,8 @@ public class MQConsumer {
 
     @PreDestroy
     public synchronized void onDestroy() {
-        if (jmsConnection != null) {
+        if (running) {
+            running = false;
             closeJmsResources();
             LOG.info("MQ consumer shut down on application stop");
         }
@@ -79,64 +96,47 @@ public class MQConsumer {
 
     // ── private ──────────────────────────────────────────────────────────────
 
-    private void readLoop() {
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                MessageConsumer consumer = jmsConsumer; // snapshot — may be nulled by stop()/reconnect
-                if (consumer == null) {
-                    if (closing) {
-                        return; // resources torn down under us — nothing to do
-                    }
-                    continue; // transient (mid-reconnect) — re-check interrupt and loop
-                }
-                // A continuously blocking receive can keep a uniform-cluster
-                // application instance protected as IMMREASN(INTRANS). A
-                // periodic non-blocking receive gives the MQ client an MQ call
-                // on which to process balancing redirects, while the interval
-                // leaves a MOVABLE window after BALTMOUT expires.
-                jakarta.jms.Message msg = consumer.receiveNoWait();
-                if (msg == null) {
-                    sleepUntilNextPulse();
-                    continue;
-                }
-                if (msg instanceof TextMessage textMsg) {
-                    String text = textMsg.getText();
-                    LOG.infof("GET message: %s", text);
-                    webSocket.broadcast(text);
-                    receiveCounter.incrementAndGet();
-                } else {
-                    LOG.warnf("Ignoring non-text message of type: %s", msg.getClass().getName());
-                }
-            } catch (JMSException e) {
-                if (closing) {
-                    // Normal shutdown path — stop() or onDestroy() closed the connection.
-                    return;
-                }
-                LOG.warnf("MQ consumer disconnected unexpectedly: %s — reconnecting", e.getLocalizedMessage());
-                reconnectLoop();
-            } catch (RuntimeException e) {
-                if (closing) {
-                    return; // shutdown race (e.g. NPE from a nulled consumer) — expected
-                }
-                // Never let an unexpected runtime error kill the listener thread and
-                // leave the consumer silently dead while isRunning() still reports true.
-                LOG.error("Unexpected error in MQ consumer loop — continuing", e);
+    /** Async delivery callback — acknowledged automatically when it returns. */
+    private void onMessage(Message msg) {
+        try {
+            if (msg instanceof TextMessage textMsg) {
+                String text = textMsg.getText();
+                LOG.infof("GET message: %s", text);
+                webSocket.broadcast(text);
+                receiveCounter.incrementAndGet();
+            } else {
+                LOG.warnf("Ignoring non-text message of type: %s", msg.getClass().getName());
             }
+        } catch (JMSException e) {
+            LOG.error("Error handling MQ message", e);
         }
     }
 
-    private void sleepUntilNextPulse() {
-        try {
-            Thread.sleep(config.consumerPulseInterval() * 1000L);
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
+    /** Layer-2 fallback: fired by the provider when a connection error surfaces. */
+    private void onException(JMSException e) {
+        if (!running || closing) {
+            return; // stopping, or a teardown we triggered — ignore
         }
+        if (!reconnecting.compareAndSet(false, true)) {
+            return; // a reconnect is already in flight
+        }
+        LOG.warnf("MQ consumer connection error: %s — reconnecting", e.getLocalizedMessage());
+        Thread.ofPlatform().name("mq-consumer-reconnect").daemon(true).start(() -> {
+            try {
+                reconnectLoop();
+            } finally {
+                reconnecting.set(false);
+            }
+        });
     }
 
     private void reconnectLoop() {
-        while (!closing && !Thread.currentThread().isInterrupted()) {
+        while (running && !closing && !Thread.currentThread().isInterrupted()) {
             synchronized (this) {
-                closeJmsResources(false);
+                if (!running) {
+                    return; // stopped while we waited
+                }
+                closeJmsResources();
                 try {
                     openJmsResources();
                     LOG.info("MQ consumer reconnected");
@@ -156,22 +156,16 @@ public class MQConsumer {
 
     private void openJmsResources() throws JMSException {
         jmsConnection = connectionFactory.createConnection();
+        jmsConnection.setExceptionListener(this::onException);
         jmsSession = jmsConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
         Queue queue = jmsSession.createQueue(config.queue());
         jmsConsumer = jmsSession.createConsumer(queue);
+        jmsConsumer.setMessageListener(this::onMessage);
         jmsConnection.start();
     }
 
     private void closeJmsResources() {
-        closeJmsResources(true);
-    }
-
-    private void closeJmsResources(boolean interruptListener) {
         closing = true;
-        if (interruptListener && listenerThread != null) {
-            listenerThread.interrupt();
-            listenerThread = null;
-        }
         try { if (jmsConsumer   != null) jmsConsumer.close();   } catch (JMSException ignored) {}
         try { if (jmsSession    != null) jmsSession.close();    } catch (JMSException ignored) {}
         try { if (jmsConnection != null) jmsConnection.close(); } catch (JMSException ignored) {}

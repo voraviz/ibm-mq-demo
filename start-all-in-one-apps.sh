@@ -7,7 +7,7 @@ then
 fi
 cd all-in-one-app
 QUARKUS_HTTP_PORT=9190
-MAX_PORT=$(expr $QUARKUS_HTTP_PORT + 10 )
+MAX_PORT=$(expr $QUARKUS_HTTP_PORT + 8 )
 
 while [ $QUARKUS_HTTP_PORT -lt $MAX_PORT ]
 do
