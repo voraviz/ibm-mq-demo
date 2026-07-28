@@ -12,7 +12,8 @@
 #
 # Usage:   ./check-app-balancing-status-vm.sh <appltag> [qmgr ...]
 # Example: ./check-app-balancing-status-vm.sh keshi QM1 QM2
-# Env:     INTERVAL=<seconds>  (default 5)
+# Env:     INTERVAL=<seconds>    (default 5)
+#          SHOW_LOCAL=1          also print per-instance MOVABLE / IMMREASN
 
 set -u
 
@@ -28,6 +29,7 @@ QMGRS=("$@")
 [[ ${#QMGRS[@]} -eq 0 ]] && QMGRS=(QM1 QM2)
 
 INTERVAL="${INTERVAL:-5}"
+SHOW_LOCAL="${SHOW_LOCAL:-0}"
 
 # Resolve the Active Native HA instance name for a QM (empty if unavailable).
 # Same field/parse layout as the container script's dspmq pipeline, filtered to
@@ -56,6 +58,12 @@ while true; do
         conn=$(count_connections "$qmgr")
         echo "========================="
         echo "DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)" | runmqsc "$qmgr" 2>/dev/null
+        if [ "$SHOW_LOCAL" = "1" ]; then
+            echo "--- $qmgr local eligibility ---"
+            echo "DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) MOVABLE IMMREASN" \
+                | runmqsc "$qmgr" 2>/dev/null \
+                | grep -E "MOVABLE\(|IMMREASN\("
+        fi
         echo "========================="
         echo "$qmgr Active on: ${active:-<unavailable>} with $conn connections"
     done

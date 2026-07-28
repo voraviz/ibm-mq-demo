@@ -7,7 +7,8 @@
 #
 # Usage:   ./check-app-balancing-status-vm-single.sh <qmgr> <appltag>
 # Example: ./check-app-balancing-status-vm-single.sh QM1 keshi
-# Env:     INTERVAL=<seconds>  (default 5)
+# Env:     INTERVAL=<seconds>    (default 5)
+#          SHOW_LOCAL=1          also print per-instance MOVABLE / IMMREASN
 
 set -u
 
@@ -19,6 +20,7 @@ if [[ -z "$QMGR" || -z "$APPLTAG" ]]; then
 fi
 
 INTERVAL="${INTERVAL:-5}"
+SHOW_LOCAL="${SHOW_LOCAL:-0}"
 
 # Resolve the Active Native HA instance name (empty if unavailable).
 get_active_instance() {
@@ -42,6 +44,12 @@ while true; do
     clear
     echo "========================="
     echo "DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)" | runmqsc "$QMGR" 2>/dev/null
+    if [ "$SHOW_LOCAL" = "1" ]; then
+        echo "--- $QMGR local eligibility ---"
+        echo "DISPLAY APSTATUS('$APPLTAG') TYPE(LOCAL) MOVABLE IMMREASN" \
+            | runmqsc "$QMGR" 2>/dev/null \
+            | grep -E "MOVABLE\(|IMMREASN\("
+    fi
     echo "========================="
     echo "$QMGR Active on: ${active:-<unavailable>} with $conn connections"
     sleep "$INTERVAL"
