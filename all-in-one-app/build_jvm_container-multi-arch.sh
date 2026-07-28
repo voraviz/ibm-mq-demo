@@ -31,10 +31,11 @@ fi
 $CONTAINER_RUNTIME build --platform $PLATFORM  --manifest \
 $IMAGE -f src/main/docker/Dockerfile.$DOCKERFILE  .
 $CONTAINER_RUNTIME manifest push $IMAGE
-ARCH=$($CONTAINER_RUNTIME manifest inspect ${CONTAINER_NAME}:${TAG} | jq -r '.manifests[].platform.architecture')
-printf "${CONTAINER_NAME}:${TAG} architectures:\n\r $ARCH"
-# if [ $? -eq 0 ];
-# then
-#    ARCH=$($CONTAINER_RUNTIME inspect ${CONTAINER_NAME}:${TAG} | jq '.[0].Architecture' | sed 's/\"//g')
-#    printf "${CONTAINER_NAME}:${TAG} architecture is $ARCH"
-# fi
+if [ $? -eq 0 ];
+then
+    # Use `manifest inspect` (not `inspect`): `inspect` resolves a manifest to a
+    # single image — the host arch — so it always prints just arm64 here.
+    # `manifest inspect` lists every architecture actually in the manifest list.
+    ARCH=$($CONTAINER_RUNTIME manifest inspect ${CONTAINER_NAME}:${TAG} | jq -r '.manifests[].platform.architecture')
+    printf "${CONTAINER_NAME}:${TAG} architectures:\n%s\n" "$ARCH"
+fi
