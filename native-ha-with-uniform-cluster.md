@@ -423,6 +423,12 @@ rebalance — no polling interval or pulse tuning is required. (A manual blockin
 `receive()` loop, by contrast, keeps the instance non-movable and needs a
 periodic-receive workaround to be balanced at all.)
 
+> The earlier polling-loop implementation is preserved at the git tag
+> [`all-in-one-loop`](#) for demo/comparison (`git checkout all-in-one-loop`).
+> It uses `receiveNoWait()` on a pulse interval so the instance periodically
+> becomes movable within `BALTIMEOUT`; the current `MessageListener` version is
+> tagged `all-in-one-listener`.
+
 Check balancing state with [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms):
 
 ```bash
@@ -845,10 +851,10 @@ echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM" | runmqsc QM1
 
 IBM MQ 9.4.x documentation:
 - [CCDT (Client Channel Definition Table)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=tables-configuring-json-format-ccdt) — JSON format used by the client apps in this demo.
-<!-- - [Native HA](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=multiplatforms-native-ha) — Raft-based high availability groups. -->
-<!-- - [Uniform clusters](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-uniform) — automatic client connection balancing across queue managers. -->
 - [Automatic application balancing](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-automatic-application-balancing) — how connections are moved to keep instances even.
 - [`BALTIMEOUT` (balance timeout)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout) — grace period the QM waits for an instance to become movable; default 10s.
 - [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms) — inspect `BALANCED` / `MOVCOUNT` per application.
 <!-- - [`AutoCluster` stanza (qm.ini)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=file-autocluster-stanza-qmini) — the uniform-cluster configuration used in the node `qm.ini` files. -->
 
+<!-- - [Native HA](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=multiplatforms-native-ha) — Raft-based high availability groups. -->
+<!-- - [Uniform clusters](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-uniform) — automatic client connection balancing across queue managers. -->
