@@ -368,7 +368,19 @@ mvn package -Dquarkus.profile=otel   # or: mvn quarkus:dev -Dquarkus.profile=ote
 > pass `-Dquarkus.otel.sdk.disabled=true` (or `QUARKUS_OTEL_SDK_DISABLED=true`) to pause
 > tracing at runtime.
 
-Prebuild container is available at *quay.io/voravitl/simple-mq-app:otel*
+To build the container image yourself, pass `otel` as the tag — both scripts
+detect `TAG=otel` and add `-Dquarkus.profile=otel` to the Maven build:
+
+```bash
+# Single-arch (host platform)
+./build_jvm_container.sh otel
+
+# Multi-arch (linux/amd64 + linux/arm64 manifest, pushed to the registry)
+./build_jvm_container-multi-arch.sh otel
+```
+
+Without the `otel` argument they build the default (no-OTEL) image under their
+own default tag. A prebuilt image is available at *quay.io/voravitl/simple-mq-app:otel*.
 
 ### Jaeger
 
