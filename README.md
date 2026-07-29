@@ -17,8 +17,9 @@ ibm-mq-demo/
 ├── mq-native-ha/         # MQ Native HA container configs (ini + MQSC)
 ├── all-in-one-app/       # Quarkus/JMS + Vue.js all-in-one app (Java)
 ├── api-app-go/           # Standalone Go REST API backend
+├── api-app-go-jms20/     # Go REST API backend using mq-golang-jms20
 ├── ui-app/               # Vue 3 + Vite frontend (pairs with api-app-go)
-├── api-app/              # Quarkus REST API microservice (Java)
+├── config/               # Shared app config (application[.otel].properties)
 ├── etc/                  # Prometheus/Grafana/Jaeger configs + startup scripts
 ├── native-ha.md                        # Native HA setup and failover walkthrough
 ├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
