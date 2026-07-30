@@ -1,0 +1,258 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.72.0"
+  },
+  "ReportID": "019fb127-6dca-704a-8383-ccae94b9d3ba",
+  "CreatedAt": "2026-07-30T10:52:59.08202+07:00",
+  "ArtifactName": "sbom-out/simple-mq-api-go_latest_amd64.cdx.json",
+  "ArtifactType": "cyclonedx",
+  "Metadata": {
+    "OS": {
+      "Family": "rhel",
+      "Name": "9.8"
+    }
+  },
+  "Results": [
+    {
+      "Target": "",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Packages": [
+        {
+          "ID": "github.com/beorn7/perks@v1.0.1",
+          "Name": "github.com/beorn7/perks",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/beorn7/perks@v1.0.1",
+            "UID": "6942176dec94d0bd",
+            "BOMRef": "pkg:golang/github.com/beorn7/perks@v1.0.1?package-id=942bf221ea047e11"
+          },
+          "Version": "v1.0.1"
+        },
+        {
+          "ID": "github.com/cespare/xxhash/v2@v2.3.0",
+          "Name": "github.com/cespare/xxhash/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0",
+            "UID": "bcbeb2eae0457c68",
+            "BOMRef": "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0?package-id=b1f61828ebd0f4a6"
+          },
+          "Version": "v2.3.0"
+        },
+        {
+          "ID": "github.com/gorilla/websocket@v1.5.3",
+          "Name": "github.com/gorilla/websocket",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/gorilla/websocket@v1.5.3",
+            "UID": "948b9fc199f7f894",
+            "BOMRef": "pkg:golang/github.com/gorilla/websocket@v1.5.3?package-id=aa4dd43da938777b"
+          },
+          "Version": "v1.5.3"
+        },
+        {
+          "ID": "github.com/ibm-messaging/ibm_mq/api-app-go",
+          "Name": "github.com/ibm-messaging/ibm_mq/api-app-go",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/ibm-messaging/ibm_mq/api-app-go",
+            "UID": "7354fdf2f429e22c",
+            "BOMRef": "pkg:golang/github.com/ibm-messaging/ibm_mq/api-app-go?package-id=fbcde05400064820"
+          },
+          "DependsOn": [
+            "github.com/beorn7/perks@v1.0.1",
+            "github.com/cespare/xxhash/v2@v2.3.0",
+            "github.com/gorilla/websocket@v1.5.3",
+            "github.com/ibm-messaging/mq-golang/v5@v5.7.2",
+            "github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822",
+            "github.com/prometheus/client_golang@v1.23.2",
+            "github.com/prometheus/client_model@v0.6.2",
+            "github.com/prometheus/common@v0.66.1",
+            "github.com/prometheus/procfs@v0.16.1",
+            "go.yaml.in/yaml/v2@v2.4.2",
+            "golang.org/x/sys@v0.35.0",
+            "google.golang.org/protobuf@v1.36.8",
+            "stdlib@v1.26.5"
+          ]
+        },
+        {
+          "ID": "github.com/ibm-messaging/mq-golang/v5@v5.7.2",
+          "Name": "github.com/ibm-messaging/mq-golang/v5",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/ibm-messaging/mq-golang/v5@v5.7.2",
+            "UID": "c5f52f24cdad867d",
+            "BOMRef": "pkg:golang/github.com/ibm-messaging/mq-golang/v5@v5.7.2?package-id=cd2880c0183be2b8"
+          },
+          "Version": "v5.7.2"
+        },
+        {
+          "ID": "github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822",
+          "Name": "github.com/munnerz/goautoneg",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822",
+            "UID": "c5b53567e23ab77",
+            "BOMRef": "pkg:golang/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822?package-id=16d4521c95825400"
+          },
+          "Version": "v0.0.0-20191010083416-a7dc8b61c822"
+        },
+        {
+          "ID": "github.com/prometheus/client_golang@v1.23.2",
+          "Name": "github.com/prometheus/client_golang",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/prometheus/client_golang@v1.23.2",
+            "UID": "24546c0e3b6a3b3c",
+            "BOMRef": "pkg:golang/github.com/prometheus/client_golang@v1.23.2?package-id=1ff70cd401922beb"
+          },
+          "Version": "v1.23.2"
+        },
+        {
+          "ID": "github.com/prometheus/client_model@v0.6.2",
+          "Name": "github.com/prometheus/client_model",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/prometheus/client_model@v0.6.2",
+            "UID": "f163559fcef00297",
+            "BOMRef": "pkg:golang/github.com/prometheus/client_model@v0.6.2?package-id=b1bc0ffa233385b1"
+          },
+          "Version": "v0.6.2"
+        },
+        {
+          "ID": "github.com/prometheus/common@v0.66.1",
+          "Name": "github.com/prometheus/common",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/prometheus/common@v0.66.1",
+            "UID": "6ad7bfa1564ca7d1",
+            "BOMRef": "pkg:golang/github.com/prometheus/common@v0.66.1?package-id=40098f7672e932e3"
+          },
+          "Version": "v0.66.1"
+        },
+        {
+          "ID": "github.com/prometheus/procfs@v0.16.1",
+          "Name": "github.com/prometheus/procfs",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/prometheus/procfs@v0.16.1",
+            "UID": "d1ccf8ab9d5bf55c",
+            "BOMRef": "pkg:golang/github.com/prometheus/procfs@v0.16.1?package-id=c4c89aa8c1f468c8"
+          },
+          "Version": "v0.16.1"
+        },
+        {
+          "ID": "go.yaml.in/yaml/v2@v2.4.2",
+          "Name": "go.yaml.in/yaml/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/go.yaml.in/yaml/v2@v2.4.2",
+            "UID": "f8c52ddda1d51e5a",
+            "BOMRef": "pkg:golang/go.yaml.in/yaml/v2@v2.4.2?package-id=b8bebf1e401df699"
+          },
+          "Version": "v2.4.2"
+        },
+        {
+          "ID": "golang.org/x/sys@v0.35.0",
+          "Name": "golang.org/x/sys",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/sys@v0.35.0",
+            "UID": "53d791df0519620",
+            "BOMRef": "pkg:golang/golang.org/x/sys@v0.35.0?package-id=02d5c9667a2b61ae"
+          },
+          "Version": "v0.35.0"
+        },
+        {
+          "ID": "google.golang.org/protobuf@v1.36.8",
+          "Name": "google.golang.org/protobuf",
+          "Identifier": {
+            "PURL": "pkg:golang/google.golang.org/protobuf@v1.36.8",
+            "UID": "5c4c076bf921b336",
+            "BOMRef": "pkg:golang/google.golang.org/protobuf@v1.36.8?package-id=44f6c0f9e1f344dc"
+          },
+          "Version": "v1.36.8"
+        },
+        {
+          "ID": "stdlib@v1.26.5",
+          "Name": "stdlib",
+          "Identifier": {
+            "PURL": "pkg:golang/stdlib@1.26.5",
+            "UID": "4196be90dc5c74e5",
+            "BOMRef": "pkg:golang/stdlib@1.26.5?package-id=2294011f2ec00727"
+          },
+          "Version": "1.26.5",
+          "Licenses": [
+            "BSD-3-Clause"
+          ]
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-39824",
+          "VendorIDs": [
+            "GO-2026-5024"
+          ],
+          "PkgID": "golang.org/x/sys@v0.35.0",
+          "PkgName": "golang.org/x/sys",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/sys@v0.35.0",
+            "UID": "53d791df0519620",
+            "BOMRef": "pkg:golang/golang.org/x/sys@v0.35.0?package-id=02d5c9667a2b61ae"
+          },
+          "InstalledVersion": "v0.35.0",
+          "FixedVersion": "0.44.0",
+          "Status": "fixed",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-39824",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Fingerprint": "sha256:380263e87993871dbe0d03afb8a48b969793e70b6466f4adf9ee73f214ec23d5",
+          "Title": "Invoking integer overflow in NewNTUnicodeString in golang.org/x/sys/windows",
+          "Description": "NewNTUnicodeString does not check for string length overflow. When provided with a string that overflows the maximum size of a NTUnicodeString (a 16-bit number of bytes), it returns a truncated string rather than an error.",
+          "Severity": "UNKNOWN",
+          "CweIDs": [
+            "CWE-190"
+          ],
+          "References": [
+            "https://go.dev/cl/770080",
+            "https://go.dev/issue/78916",
+            "https://groups.google.com/g/golang-announce/c/6MMI8Lj-Atg",
+            "https://pkg.go.dev/vuln/GO-2026-5024"
+          ],
+          "PublishedDate": "2026-05-22T20:16:33.057Z",
+          "LastModifiedDate": "2026-07-23T16:10:00.137Z"
+        }
+      ]
+    },
+    {
+      "Target": "",
+      "Class": "lang-pkgs",
+      "Type": "nuget",
+      "Packages": [
+        {
+          "ID": "@#_MQLONGNAME_#@ for Windows@1.0.0.0",
+          "Name": "@#_MQLONGNAME_#@ for Windows",
+          "Identifier": {
+            "PURL": "pkg:nuget/%40%23_MQLONGNAME_%23%40%20for%20Windows@1.0.0.0",
+            "UID": "3478036fd312fc82",
+            "BOMRef": "pkg:nuget/%40%23_MQLONGNAME_%23%40%20for%20Windows@1.0.0.0?package-id=a4aaa4d8e94e8479"
+          },
+          "Version": "1.0.0.0"
+        },
+        {
+          "ID": "IBM MQ for Windows@9.4.5.1",
+          "Name": "IBM MQ for Windows",
+          "Identifier": {
+            "PURL": "pkg:nuget/IBM%20MQ%20for%20Windows@9.4.5.1",
+            "UID": "51daeb3aa117cb05",
+            "BOMRef": "pkg:nuget/IBM%20MQ%20for%20Windows@9.4.5.1?package-id=4667608390d354dc"
+          },
+          "Version": "9.4.5.1"
+        },
+        {
+          "ID": "IBM Message Service Client for .NET Standard@9.4.5.1",
+          "Name": "IBM Message Service Client for .NET Standard",
+          "Identifier": {
+            "PURL": "pkg:nuget/IBM%20Message%20Service%20Client%20for%20.NET%20Standard@9.4.5.1",
+            "UID": "e9a7d7d1ffcb85be",
+            "BOMRef": "pkg:nuget/IBM%20Message%20Service%20Client%20for%20.NET%20Standard@9.4.5.1?package-id=1375e9a35c9fa5b3"
+          },
+          "Version": "9.4.5.1"
+        }
+      ]
+    }
+  ]
+}
