@@ -6,7 +6,9 @@ This repository demonstrates IBM MQ capabilities across three areas:
 |---|---|---|
 | **Native HA** | [native-ha.md](native-ha.md) | ✅ Available |
 | **Native HA + Uniform Cluster** | [native-ha-with-uniform-cluster.md](native-ha-with-uniform-cluster.md) | ✅ Available |
-| **Observability** | [metrics-and-otel.md](Metrics-and-OTEL.md) | 🚧 Work in progress (You can try)|
+| **Observability** | [metrics-and-otel.md](Metrics-and-OTEL.md) | ✅ Available|
+| **Security (SBOM & scanning)** | [SECURITY.md](SECURITY.md) | ✅ Available |
+<!-- | **Observability** | [metrics-and-otel.md](Metrics-and-OTEL.md) | 🚧 Work in progress (You can try)| -->
 
 ---
 
@@ -24,7 +26,9 @@ ibm-mq-demo/
 ├── native-ha.md                        # Native HA setup and failover walkthrough
 ├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
 ├── ccdt/                               # CCDT JSON files (nativeha + cluster)
-├── Metrics-and-OTEL.md                 # Observability guide (WIP)
+├── Metrics-and-OTEL.md                 # Observability guide
+├── SECURITY.md                         # SBOM & vulnerability scanning
+├── scan-sbom.sh                        # syft SBOM + grype/trivy scan (any app)
 └── README.md
 ```
 
@@ -48,8 +52,17 @@ Two Native HA groups (`QM1` and `QM2`, three nodes each) joined into a single **
 
 ## Observability
 
-> 🚧 **Work in progress**
+<!-- > 🚧 **Work in progress** -->
 
 Planned coverage: Prometheus metrics, OpenTelemetry distributed tracing, Grafana dashboards, and Jaeger trace UI.
 
 → See **[Metrics-and-OTEL.md](Metrics-and-OTEL.md)** for current notes.
+
+---
+
+## Security
+
+SBOM generation and vulnerability scanning (syft + grype + trivy) via
+[`scan-sbom.sh`](scan-sbom.sh), and why both scanners are run.
+
+→ See **[SECURITY.md](SECURITY.md)**
