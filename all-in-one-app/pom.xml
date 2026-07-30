@@ -19,7 +19,6 @@
     <ibm.mq.version>9.4.3.0</ibm.mq.version>
     <node.version>v20.19.1</node.version>
     <npm.version>10.8.2</npm.version>
-    <dependency-check.version>12.1.1</dependency-check.version>
   </properties>
 
   <dependencyManagement>
@@ -179,24 +178,6 @@
             <configuration><arguments>run build</arguments></configuration>
           </execution>
         </executions>
-      </plugin>
-
-      <!-- OWASP Dependency-Check: run with ./mvnw dependency-check:check -->
-      <plugin>
-        <groupId>org.owasp</groupId>
-        <artifactId>dependency-check-maven</artifactId>
-        <version>${dependency-check.version}</version>
-        <configuration>
-          <!-- Never fail the build — this is a report-only scan -->
-          <failBuildOnCVSS>11</failBuildOnCVSS>
-          <!-- Produce both human-readable and machine-parseable output -->
-          <formats>
-            <format>HTML</format>
-            <format>XML</format>
-          </formats>
-          <!-- Disable Sonatype OSS Index — requires credentials not available here -->
-          <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
-        </configuration>
       </plugin>
     </plugins>
   </build>
