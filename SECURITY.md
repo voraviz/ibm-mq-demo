@@ -80,3 +80,37 @@ superset of the other, so **union** their reports rather than intersecting:
 Set membership is an input to triage, not a verdict. Confirm a finding by
 checking reachability, the actual fixed version, and distro backports for that
 specific CVE.
+
+## Signing the SBOM (cosign)
+
+Attach the SBOM to the image as a signed [in-toto](https://in-toto.io/)
+attestation with [cosign](https://github.com/sigstore/cosign). This binds the
+SBOM to the image **digest** and proves provenance — consumers verify before
+trusting. Only needed when publishing; local triage doesn't require it.
+
+```bash
+# 1. Give cosign registry creds. cosign reads ~/.docker/config.json, NOT
+#    podman's ~/.config/containers/auth.json — 'podman login' is not enough.
+cosign login quay.io -u <user> -p <token>
+
+# 2. Attest: keyless signing (Sigstore Fulcio) opens a browser for OIDC login
+#    (GitHub/Google/Microsoft), then pushes the attestation next to the image.
+cosign attest --type cyclonedx \
+  --predicate sbom-out/simple-mq-app_latest_amd64.cdx.json \
+  quay.io/voravitl/simple-mq-app:latest
+
+# 3. Verify (downstream). Pin identity/issuer in real use; regex = any signer.
+cosign verify-attestation --type cyclonedx \
+  --certificate-identity-regexp '.*' \
+  --certificate-oidc-issuer-regexp '.*' \
+  quay.io/voravitl/simple-mq-app:latest
+```
+
+Two **separate** identities: registry auth (quay user) is only *where the
+signature is stored*; the signing identity (OIDC person or CI workload) is
+*who signed* and is what `verify-attestation` checks. Quay is storage, not an
+OIDC provider.
+
+`attest` requires an image (it needs a digest) — a `dir:` target can't be
+attested. In CI, use the ambient workflow OIDC token (`id-token: write`)
+instead of the browser flow.
