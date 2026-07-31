@@ -18,17 +18,18 @@ This repository demonstrates IBM MQ capabilities across three areas:
 ibm-mq-demo/
 ├── mq-native-ha/         # MQ Native HA container configs (ini + MQSC)
 ├── all-in-one-app/       # Quarkus/JMS + Vue.js all-in-one app (Java)
-├── api-app-go/           # Standalone Go REST API backend
 ├── api-app-go-jms20/     # Go REST API backend using mq-golang-jms20
 ├── ui-app/               # Vue 3 + Vite frontend (pairs with api-app-go)
 ├── config/               # Shared app config (application[.otel].properties)
 ├── etc/                  # Prometheus/Grafana/Jaeger configs + startup scripts
 ├── native-ha.md                        # Native HA setup and failover walkthrough
 ├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
-├── ccdt/                               # CCDT JSON files (nativeha + cluster)
-├── Metrics-and-OTEL.md                 # Observability guide
-├── SECURITY.md                         # SBOM & vulnerability scanning
-├── scan-sbom.sh                        # syft SBOM + grype/trivy scan (any app)
+├── ccdt/                 # CCDT JSON files (nativeha + cluster)
+├── Metrics-and-OTEL.md   # Observability guide
+├── SECURITY.md           # SBOM & vulnerability scanning
+├── scan-sbom.sh          # syft SBOM + grype/trivy scan (any app)
+├── create-cluster.sh     # create 2 Native HA group with Uniform Cluster 
+├── create-nativeha.sh    # create 1 Native HA group with MQ Exporter
 └── README.md
 ```
 
