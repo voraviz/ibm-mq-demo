@@ -847,11 +847,20 @@ Whether the consuming `MQGET` runs **under syncpoint** decides both the delivery
 
 | Consumer | `MQGET` | Delivery | `IMMREASN` snapshot |
 |---|---|---|---|
-| `api-app-go` / `api-app-go-jms20`, non-transacted (default) | `NO_SYNCPOINT` | **at-most-once** — message removed on get; lost if the app crashes before handling it | `NONE` / `MOVABLE(YES)` — no unit of work |
-| Java `all-in-one-app` async listener (default) | internal syncpoint (auto-ack) | **at-most-once** | often `INTRANS` even when idle (armed GET) — still balances at delivery boundaries (see table above) |
-| Any app, transacted | `SYNCPOINT` + explicit `Commit()` | **at-least-once** — stays on the queue until commit; a crash rolls back → redelivery | `INTRANS` while a message is in-flight; clears on commit |
+| `api-app-go` (raw MQI) | `NO_SYNCPOINT` (fixed — no toggle) | **at-most-once** — message removed on get; lost if the app crashes before handling it | `NONE` / `MOVABLE(YES)` — no unit of work |
+| `api-app-go-jms20`, default | `NO_SYNCPOINT` | **at-most-once** | `NONE` / `MOVABLE(YES)` — no unit of work |
+| `api-app-go-jms20`, `IBM_MQ_TRANSACTED=true` | `SYNCPOINT` + explicit `Commit()` | **at-least-once** — stays on the queue until commit; a crash rolls back → redelivery | `INTRANS` while a message is in-flight; clears on commit |
+| Java `all-in-one-app` async listener (default, `AUTO_ACKNOWLEDGE`) | internal syncpoint | **at-least-once** — auto-ack commits only *after* `onMessage()` returns successfully; a throw/crash mid-handling rolls back → redelivery | often `INTRANS` even when idle (armed GET) — still balances at delivery boundaries (see table above) |
 
-All three balance in a healthy cluster — an `INTRANS` snapshot is not "stuck" (the move
+**Which app can do at-least-once:**
+
+| App | Default | At-least-once available? |
+|---|---|---|
+| `api-app-go` (raw MQI) | at-most-once | **No** — no syncpoint code, no toggle |
+| `api-app-go-jms20` | at-most-once | **Yes** — set `IBM_MQ_TRANSACTED=true` |
+| Java `all-in-one-app` | **at-least-once** (auto-ack) | Already on — redelivers on `onMessage` failure |
+
+All balance in a healthy cluster — an `INTRANS` snapshot is not "stuck" (the move
 happens at the next boundary within `BALTIMEOUT`). Transacted mode simply holds the unit of
 work longer (until you commit), so a busy queue spends proportionally more time `INTRANS`.
 
@@ -866,9 +875,17 @@ each message is broadcast ([`mq/consumer.go`](api-app-go-jms20/mq/consumer.go));
 per message keeps the `INTRANS` window short.
 
 **Java `all-in-one-app`** is non-transacted today — `createSession(false, AUTO_ACKNOWLEDGE)`
-with no `commit()`. To make it transacted you would use `createSession(true, 0)` and call
-`jmsSession.commit()` at the end of `onMessage` (commit per message, or the unit of work
-stays open and the instance sits `INTRANS` far longer).
+with no `commit()` — but it is **already at-least-once**: auto-ack commits the internal
+syncpoint only after `onMessage()` returns successfully, so a failure redelivers. Switching to
+`createSession(true, 0)` + `jmsSession.commit()` would **not** improve the delivery guarantee
+here; it only earns its keep for batching several messages per commit or coordinating the get
+with another resource (e.g. a DB write) in one unit of work — and it holds the instance
+`INTRANS` longer until you commit.
+
+**`api-app-go` (raw MQI) has no at-least-once option.** It gets with `NO_SYNCPOINT` and there
+is no transacted toggle — the message is gone the instant `qObj.Get` returns. Only
+`api-app-go-jms20` (via `IBM_MQ_TRANSACTED`) and the Java listener (via auto-ack) deliver
+at-least-once.
 
 > At-least-once means the broadcast side must tolerate **duplicate** deliveries. The default
 > (non-transacted) mode suits this demo's fire-and-forget websocket fan-out.
