@@ -27,9 +27,10 @@ public class MQConnectionFactoryProducer {
         MQConnectionFactory factory = new MQConnectionFactory();
         applyConnectionConfig(factory);
         // Automatically reconnect to the queue manager when it becomes available again.
-        // WMQ_CLIENT_RECONNECT retries indefinitely until the QM is reachable.
-        // WMQ_CLIENT_RECONNECT_TIMEOUT (seconds) caps how long a single reconnect
-        // attempt waits before the client gives up and throws to the application.
+        // WMQ_CLIENT_RECONNECT retries across all hosts until the QM is reachable.
+        // WMQ_CLIENT_RECONNECT_TIMEOUT (seconds) is the TOTAL reconnect window — how
+        // long the client keeps retrying before it gives up and throws to the app
+        // (ibm.mq.client-reconnect-timeout, 900 s here; IBM default 1800 s).
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, config.clientReconnectTimeout()); 
         LOG.debug("MQ factory configured — queueManager: " + config.queueManager()

@@ -467,10 +467,11 @@ public class MQConnectionFactoryProducer {
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
         factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
-        // WMQ_CLIENT_RECONNECT retries indefinitely across all hosts in the
-        // connection name list (or CCDT) until the active node is found.
-        // WMQ_CLIENT_RECONNECT_TIMEOUT caps each individual reconnect attempt
-        // (ibm.mq.client-reconnect-timeout, default 5 s).
+        // WMQ_CLIENT_RECONNECT retries across all hosts in the connection name
+        // list (or CCDT) until the active node is found.
+        // WMQ_CLIENT_RECONNECT_TIMEOUT is the TOTAL reconnect window — how long
+        // the client keeps retrying before giving up and throwing to the app
+        // (ibm.mq.client-reconnect-timeout, 900 s here; IBM default 1800 s).
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_TIMEOUT, config.clientReconnectTimeout());
         return factory;
@@ -977,7 +978,7 @@ reconnect loop that only runs when Layer 1 gives up and surfaces an error to the
 
 | Layer | `all-in-one-app` (Java/JMS) | `api-app-go` (raw `ibmmq`) |
 |--|--|--|
-| **1 — client auto-reconnect** | `WMQ_CLIENT_RECONNECT` on the shared `ConnectionFactory`, capped per attempt by `WMQ_CLIENT_RECONNECT_TIMEOUT` (`ibm.mq.client-reconnect-timeout`, default 5 s) | `MQCNO_RECONNECT` on every connection; `HeartbeatInterval` (`IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) only sets how fast a dead link is *detected* |
+| **1 — client auto-reconnect** | `WMQ_CLIENT_RECONNECT` on the shared `ConnectionFactory`, with a total reconnect window of `WMQ_CLIENT_RECONNECT_TIMEOUT` (`ibm.mq.client-reconnect-timeout`, 900 s here; IBM default 1800 s) | `MQCNO_RECONNECT` on every connection; `HeartbeatInterval` (`IBM_MQ_HEARTBEAT_INTERVAL`, default 5 s) only sets how fast a dead link is *detected* |
 | **2 — app reconnect loop** | `MQConsumer.reconnectLoop()` — rebuild JMS resources every **1 s** | `Consumer.reconnectLoop()` — rebuild qmgr+queue handles every **1 s** |
 
 #### Consumer
