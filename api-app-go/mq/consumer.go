@@ -13,7 +13,9 @@ import (
 
 // Consumer reads messages from an IBM MQ queue in a background goroutine,
 // broadcasting each received message via a configurable callback.
-// Mirrors MQConsumer.java exactly: 500ms poll loop, 1s reconnect retry.
+// 500ms poll loop, 1s reconnect retry. (The Java all-in-one-app consumer uses
+// an async JMS MessageListener; the Go MQI client has no async listener, so
+// both Go apps poll — see api-app-go-jms20 for the JMS20 twin.)
 type Consumer struct {
 	cfg         *config.Config
 	broadcaster func(string)
@@ -143,7 +145,7 @@ func (c *Consumer) readLoop() {
 
 	gmo := ibmmq.NewMQGMO()
 	gmo.Options = ibmmq.MQGMO_WAIT | ibmmq.MQGMO_CONVERT
-	gmo.WaitInterval = 500 // milliseconds — mirrors MQConsumer.java jmsConsumer.receive(500)
+	gmo.WaitInterval = 500 // milliseconds — 500ms poll cadence (Java all-in-one-app is async, not polled)
 
 	buf := make([]byte, 32768)
 

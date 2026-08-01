@@ -144,6 +144,15 @@ func mqOptions(cfg *config.Config, reconnect bool) jms20subset.MQOptions {
 			// CCDT takes precedence — channel and connection list are read
 			// from the CCDT file; no ConnectionName override is needed.
 			cno.CCDTUrl = resolveCcdtUrl(cfg.CcdtUrl)
+			// ConnectionFactoryImpl always sets cno.ClientConn with a non-blank
+			// ChannelName from the placeholder Hostname/Port. A non-blank client-
+			// channel definition makes the MQ client use that single host and
+			// IGNORE the CCDT — losing the *UNIQA queue-manager group, so uniform-
+			// cluster balancing can never move the connection off its initial QM
+			// (DISPLAY APSTATUS shows MOVABLE(YES) but it stays put, QM2 empty).
+			// Clear it so the CCDT group is honoured, matching api-app-go's
+			// CCDT-only path.
+			cno.ClientConn = nil
 		} else {
 			// Override ConnectionName with the full multi-host list.
 			cno.ClientConn.ConnectionName = connectionName(cfg)

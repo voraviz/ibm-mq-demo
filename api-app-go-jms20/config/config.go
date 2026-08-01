@@ -6,7 +6,7 @@ import (
 )
 
 // Config holds all runtime configuration. Values are read from environment
-// variables; defaults mirror api-app/src/main/resources/application.properties.
+// variables; defaults mirror all-in-one-app/src/main/resources/application.properties.
 type Config struct {
 	// IBM MQ connection
 	CcdtUrl           string // IBM_MQ_CCDT_URL — if set, overrides ConnectionList + Channel
@@ -20,6 +20,7 @@ type Config struct {
 	Password          string // IBM_MQ_PASSWORD
 	Queue             string // IBM_MQ_QUEUE
 	HeartbeatInterval int    // IBM_MQ_HEARTBEAT_INTERVAL — client channel heartbeat interval, in seconds
+	Transacted        bool   // IBM_MQ_TRANSACTED — consume under syncpoint (at-least-once); default false
 
 	// HTTP server
 	ServerPort string // SERVER_PORT
@@ -41,6 +42,15 @@ func getenvInt(key string, def int) int {
 	return def
 }
 
+func getenvBool(key string, def bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
+}
+
 // Load reads configuration from environment variables with defaults.
 func Load() *Config {
 	return &Config{
@@ -55,6 +65,7 @@ func Load() *Config {
 		Password:          getenv("IBM_MQ_PASSWORD", "passw0rd"),
 		Queue:             getenv("IBM_MQ_QUEUE", "DEV.DEMO.QL.IN"),
 		HeartbeatInterval: getenvInt("IBM_MQ_HEARTBEAT_INTERVAL", 5),
+		Transacted:        getenvBool("IBM_MQ_TRANSACTED", false),
 		ServerPort:        getenv("SERVER_PORT", "8081"),
 	}
 }

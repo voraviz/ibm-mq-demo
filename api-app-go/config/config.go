@@ -6,7 +6,7 @@ import (
 )
 
 // Config holds all runtime configuration. Values are read from environment
-// variables; defaults mirror api-app/src/main/resources/application.properties.
+// variables; defaults mirror all-in-one-app/src/main/resources/application.properties.
 type Config struct {
 	// IBM MQ connection
 	CcdtUrl           string // IBM_MQ_CCDT_URL — if set, overrides ConnectionList + Channel

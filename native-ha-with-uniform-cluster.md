@@ -350,13 +350,7 @@ For a Uniform Cluster, **CCDT is the recommended connection method**. It lists a
 
 ## Test Applications
 
-All applications connect to the Uniform Cluster using the **CCDT** file ([`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)) and the queue manager name `*UNIQA` so the client accepts connections from either `QM1` or `QM2`.
-
-<!-- | Application | Language | `BALANCED` | Notes |
-|---|---|---|---|
-| `all-in-one-app` | Java JMS | `YES` / `NO` | Full cluster rebalancing supported |
-| `api-app-go` | Go MQI C | `NOTAPPLIC` | HA failover works; rebalancing not supported by MQI C |
-| `api-app-go-jms20` | Go MQI C | `NOTAPPLIC` | Same as `api-app-go` — JMS20 wraps MQI C, not Java JMS | -->
+All applications connect to the Uniform Cluster using the **CCDT** file ([`ccdt/ccdt.cluster.json`](ccdt/ccdt.cluster.json)) and the queue manager name `*UNIQA` so the client accepts connections from either `QM1` or `QM2`. All three — the Java `all-in-one-app` and both Go apps — participate in application rebalancing; the MQI C client rebalances via `MQCNO_RECONNECT` + CCDT just like the Java JMS client.
 
 ### All-in-one Java Application
 
@@ -415,13 +409,16 @@ docker run -p 8080:8080 --network mq-ha-net \
 ```
 
 The Java consumer uses an async JMS `MessageListener` rather than a blocking
-receive loop. The MQ JMS provider delivers messages on its own thread and the
-connection sits idle in a MOVABLE state between deliveries, so the queue
-manager's [`BALTIMEOUT`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout)
-(balance timeout, default 10s) always finds a movable window to complete a
-rebalance — no polling interval or pulse tuning is required. (A manual blocking
-`receive()` loop, by contrast, keeps the instance non-movable and needs a
-periodic-receive workaround to be balanced at all.)
+receive loop. The MQ JMS provider delivers messages on its own thread. Because
+the client keeps a syncpoint GET armed for the next delivery, a snapshot usually
+shows the connection as `INTRANS` / `MOVABLE(NO)` (see [Investigating Balancing
+Eligibility](#investigating-balancing-eligibility)) — but that is **not** "stuck":
+the queue manager's [`BALTIMEOUT`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout)
+(balance timeout, default 10s) finds a movable **boundary** at each delivery to
+complete a rebalance, so no polling interval or pulse tuning is required. (A
+manual blocking `receive()` loop, by contrast, holds its GET across the whole
+wait and does not present such a boundary, so it needs a periodic-receive
+workaround to balance at all.)
 
 > The earlier polling-loop implementation is preserved at the git tag
 > [`all-in-one-loop`](#) for demo/comparison (`git checkout all-in-one-loop`).
@@ -525,8 +522,6 @@ AMQ8932I: Display application status details.
    BALANCED(NO)                     TYPE(APPL)
 ```
 
-<!-- > `BALANCED(NOTAPPLIC)` is expected for Go apps — the MQI C client does not participate in IBM MQ's application rebalancing protocol. `CLUSTER(UNIQA)` confirms the connection is cluster-aware. HA failover via `MQCNO_RECONNECT` still works across both groups. -->
-
 ---
 
 ### Golang JMS REST API
@@ -562,8 +557,6 @@ AMQ8932I: Display application status details.
    COUNT(1)                                MOVCOUNT(0)
    BALANCED(NO)                     TYPE(APPL)
 ```
-
-<!-- > Same `BALANCED(NOTAPPLIC)` behaviour as `api-app-go` — `mq-golang-jms20` wraps MQI C, not the Java JMS provider, so application rebalancing is not available. -->
 
 ---
 
@@ -846,6 +839,39 @@ echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM" | runmqsc QM1
 | `NONE` | `YES` | At a boundary, ready to move. |
 | `INTRANS` | `NO` | In a unit of work. The async JMS `MessageListener` keeps a syncpoint GET armed for the next delivery, so its consumer connection reads `INTRANS` **even when the queue is empty** (`CURDEPTH(0)`, `UNCOM(NO)`). This is normal and does **not** block balancing — the move happens at the next delivery boundary. |
 | `NOTRECONN` | `NO` | Reconnect disabled on that connection, so the cluster can never move it. In this demo these are the one-shot `/api/info` probe connections (their factory sets `WMQ_CLIENT_RECONNECT_DISABLED`); they sit out of balancing by design. |
+
+### Delivery mode and syncpoint (at-most-once vs at-least-once)
+
+Whether the consuming `MQGET` runs **under syncpoint** decides both the delivery guarantee
+*and* how the instance appears in the tables above — it's the same knob:
+
+| Consumer | `MQGET` | Delivery | `IMMREASN` snapshot |
+|---|---|---|---|
+| `api-app-go` / `api-app-go-jms20`, non-transacted (default) | `NO_SYNCPOINT` | **at-most-once** — message removed on get; lost if the app crashes before handling it | `NONE` / `MOVABLE(YES)` — no unit of work |
+| Java `all-in-one-app` async listener (default) | internal syncpoint (auto-ack) | **at-most-once** | often `INTRANS` even when idle (armed GET) — still balances at delivery boundaries (see table above) |
+| Any app, transacted | `SYNCPOINT` + explicit `Commit()` | **at-least-once** — stays on the queue until commit; a crash rolls back → redelivery | `INTRANS` while a message is in-flight; clears on commit |
+
+All three balance in a healthy cluster — an `INTRANS` snapshot is not "stuck" (the move
+happens at the next boundary within `BALTIMEOUT`). Transacted mode simply holds the unit of
+work longer (until you commit), so a busy queue spends proportionally more time `INTRANS`.
+
+**Enable transacted mode — Go `api-app-go-jms20`:**
+
+```bash
+export IBM_MQ_TRANSACTED=true    # default false
+```
+
+The consumer then opens a `JMSContextSESSIONTRANSACTED` context and calls `Commit()` after
+each message is broadcast ([`mq/consumer.go`](api-app-go-jms20/mq/consumer.go)); committing
+per message keeps the `INTRANS` window short.
+
+**Java `all-in-one-app`** is non-transacted today — `createSession(false, AUTO_ACKNOWLEDGE)`
+with no `commit()`. To make it transacted you would use `createSession(true, 0)` and call
+`jmsSession.commit()` at the end of `onMessage` (commit per message, or the unit of work
+stays open and the instance sits `INTRANS` far longer).
+
+> At-least-once means the broadcast side must tolerate **duplicate** deliveries. The default
+> (non-transacted) mode suits this demo's fire-and-forget websocket fan-out.
 
 ## References
 

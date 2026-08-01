@@ -12,7 +12,9 @@ import (
 
 // Consumer reads messages from an IBM MQ queue in a background goroutine,
 // broadcasting each received message via a configurable callback.
-// Mirrors MQConsumer.java exactly: 500ms poll loop, 1s reconnect retry.
+// 500ms poll loop, 1s reconnect retry — same model as api-app-go. (The Java
+// all-in-one-app uses an async JMS MessageListener instead; mq-golang-jms20
+// has no async listener, so this app polls.)
 type Consumer struct {
 	cf          jms20subset.ConnectionFactory
 	cfg         *config.Config
@@ -97,7 +99,17 @@ func (c *Consumer) GetCount() int64 {
 // openResources creates the JMSContext and JMSConsumer.
 // Must be called with c.mu held.
 func (c *Consumer) openResources() error {
-	ctx, jmsErr := c.cf.CreateContext(connectOption(c.cfg))
+	// Transacted → SESSIONTRANSACTED, so gets run under MQGMO_SYNCPOINT and the
+	// message stays on the queue until readLoop commits (at-least-once). Default
+	// (AUTOACKNOWLEDGE) is NO_SYNCPOINT — the message is removed on get. See
+	// native-ha.md "Consumer delivery mode".
+	var ctx jms20subset.JMSContext
+	var jmsErr jms20subset.JMSException
+	if c.cfg.Transacted {
+		ctx, jmsErr = c.cf.CreateContextWithSessionMode(jms20subset.JMSContextSESSIONTRANSACTED, connectOption(c.cfg))
+	} else {
+		ctx, jmsErr = c.cf.CreateContext(connectOption(c.cfg))
+	}
 	if jmsErr != nil {
 		return jmsErr
 	}
@@ -144,13 +156,14 @@ func (c *Consumer) readLoop() {
 		c.mu.Lock()
 		stopping := c.stopping
 		cons := c.jmsCons
+		ctx := c.jmsCtx
 		c.mu.Unlock()
 
 		if stopping || cons == nil {
 			return
 		}
 
-		// Receive with 500ms timeout — mirrors jmsConsumer.receive(500) in MQConsumer.java.
+		// Receive with 500ms timeout — same poll cadence as api-app-go's qObj.Get.
 		// A nil message with nil error means no message was available (timeout expired).
 		msg, jmsErr := cons.Receive(500)
 
@@ -185,6 +198,18 @@ func (c *Consumer) readLoop() {
 			c.broadcaster(text)
 		}
 		c.counter.Add(1)
+
+		// Transacted mode: the message was retrieved under syncpoint. Commit
+		// AFTER handing it off (broadcast) — a crash before here rolls back and
+		// the message is redelivered (at-least-once). Committing per message
+		// also closes the unit of work, so the connection returns to a MOVABLE
+		// state between messages instead of staying INTRANS. On an idle queue no
+		// message is retrieved, so no unit of work is opened and nothing to commit.
+		if c.cfg.Transacted && ctx != nil {
+			if commitErr := ctx.Commit(); commitErr != nil {
+				log.Printf("MQ consumer commit failed: %v — message will be redelivered", commitErr)
+			}
+		}
 	}
 }
 

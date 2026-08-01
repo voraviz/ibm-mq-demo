@@ -594,7 +594,7 @@ Reconnect must be enabled for automatic recovery; which flavor you pick matters:
 The `api-app-go-jms20` consumer poll loop ([`consumer.go`](api-app-go-jms20/mq/consumer.go)) mirrors the raw variant — a 500 ms receive timeout, `nil`/`nil` meaning "no message":
 
 ```go
-// 500ms receive timeout — mirrors jmsConsumer.receive(500) in MQConsumer.java.
+// 500ms receive timeout — same poll cadence as api-app-go's qObj.Get.
 // nil message with nil error means timeout expired (no message available).
 msg, jmsErr := cons.Receive(500)
 if jmsErr != nil { /* reconnectLoop() */ }
@@ -983,14 +983,19 @@ reconnect loop that only runs when Layer 1 gives up and surfaces an error to the
 
 #### Consumer
 
-Long-lived connection with a poll loop:
+The consuming model differs by app:
 
-1. Poll with a **500 ms** receive timeout (`consumer.receive(500)` / `qObj.Get` with `WaitInterval=500`).
-2. Timeout with no message → loop and re-check the stop flag.
-3. Any other error, when **not** shutting down → log "disconnected — reconnecting" and enter the app-level reconnect loop, which tears down and reopens resources every **1 s** until it succeeds or stop is requested.
+- **Java `all-in-one-app`** — an async JMS `MessageListener`. The MQ JMS provider delivers
+  messages to `onMessage` on its own thread, so there is **no poll loop**. A connection error
+  is surfaced to the `ExceptionListener` (`onException`), which launches the Layer-2
+  `reconnectLoop` (rebuild JMS resources, retry every **1 s**).
+- **Go apps (`api-app-go`, `api-app-go-jms20`)** — a blocking poll loop with a **500 ms**
+  receive (`qObj.Get` with `WaitInterval=500` / `Receive(500)`). A timeout with no message
+  loops and re-checks the stop flag; any other error, when **not** shutting down, logs
+  "disconnected — reconnecting" and enters the Layer-2 `reconnectLoop` (retry every **1 s**).
 
 Because Layer 1 absorbs most failovers transparently, the app-level `reconnectLoop` is the
-**fallback** for when the client library exhausts its reconnect attempt and throws. In Go
+**fallback** for when the client library exhausts its reconnect window and throws. In Go
 the read goroutine exclusively owns the MQ handles (Stop only sets a flag + `wg.Wait()`),
 so shutdown and reconnect never issue MQI verbs concurrently; the Java consumer achieves
 the same with a `closing` flag, `volatile` handles, and `synchronized` start/stop.
