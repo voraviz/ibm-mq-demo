@@ -86,5 +86,12 @@ public class MQConnectionFactoryProducer {
         factory.setStringProperty(WMQConstants.USERID, config.username());
         factory.setStringProperty(WMQConstants.PASSWORD, config.password());
         factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, config.applicationName());
+        // Uniform-cluster app balancing timeout (BALTIMEOUT): how long MQ waits for
+        // the app to reach a transaction/delivery boundary before forcing a rebalance.
+        // Optional — when unset, MQ uses its own default.
+        if (config.balancingTimeout().isPresent()) {
+            factory.setBalancingTimeout(config.balancingTimeout().getAsInt());
+        }
+        LOG.debug("BALTIMEOUT: " + factory.getBalancingTimeout() + "s");
     }
 }

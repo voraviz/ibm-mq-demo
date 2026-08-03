@@ -5,6 +5,7 @@ import io.smallrye.config.WithDefault;
 import io.smallrye.config.WithName;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
 @ConfigMapping(prefix = "ibm.mq")
 public interface MQConfig {
@@ -17,6 +18,9 @@ public interface MQConfig {
 
     @WithName("client-reconnect-timeout")
     int clientReconnectTimeout();
+
+    @WithName("balancing-timeout")
+    OptionalInt balancingTimeout();
 
     @WithDefault("")
     String channel();
