@@ -52,8 +52,13 @@ public class MQConnectionFactoryProducer {
         MQConnectionFactory factory = new MQConnectionFactory();
         applyConnectionConfig(factory);
         factory.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT_DISABLED);
+        // Distinct app name so probe connections (reconnect DISABLED → always
+        // IMMREASN(NOTRECONN)) don't pollute the workload's APSTATUS balancing view.
+        // WMQ_APPLICATIONNAME / APPLTAG caps at 28 chars — keep the base name short.
+        String probeName = config.applicationName() + "-probe";
+        factory.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, probeName);
         LOG.debug("MQ probe factory configured — queueManager: " + config.queueManager()
-                + ", applicationName: " + config.applicationName()
+                + ", applicationName: " + probeName
                 + ", reconnectOptions: WMQ_CLIENT_RECONNECT_DISABLED");
 
         return factory;
