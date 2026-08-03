@@ -26,7 +26,8 @@ FFDC
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-api-app-go/api-app-go
+api-app-go/api-app-go*
+api-app-go-jms20/api-app-go*
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
