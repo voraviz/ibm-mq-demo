@@ -26,6 +26,7 @@ IBM MQ **Uniform Cluster** extends Native HA by grouping two or more HA pairs in
   - [Application Load Balancing](#application-load-balancing)
     - [Monitoring Scripts](#monitoring-scripts)
     - [Investigating Balancing Eligibility](#investigating-balancing-eligibility)
+    - [Delivery mode and syncpoint (at-most-once vs at-least-once)](#delivery-mode-and-syncpoint-at-most-once-vs-at-least-once)
   - [References](#references)
 
 ---
@@ -896,6 +897,26 @@ IBM MQ 9.4.x documentation:
 - [CCDT (Client Channel Definition Table)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=tables-configuring-json-format-ccdt) — JSON format used by the client apps in this demo.
 - [Automatic application balancing](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=clusters-automatic-application-balancing) — how connections are moved to keep instances even.
 - [`BALTIMEOUT` (balance timeout)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=objects-baltimeout) — grace period the QM waits for an instance to become movable; default 10s.
+  
+  >[Connection Factory Properties](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=properties-connection-factory)
+  >**NEVER**
+  >The application never times out for the purposes of rebalancing in a uniform cluster.
+  >This value maps to the IBM MQ BalancingOption MQBNO_TIMEOUT_NEVER.
+  >
+  >**IMMEDIATE**
+  >The application immediately times out for the purposes of rebalancing in a uniform cluster.
+  >This value maps to the IBM MQ BalancingOption MQBNO_TIMEOUT_IMMEDIATE.
+  >
+  >**DEFAULT**
+  >The application times out for the purposes of rebalancing in a uniform cluster after the default period of 10 seconds.
+  >This value maps to the IBM MQ BalancingOption MQBNO_TIMEOUT_AS_DEFAULT.
+  >
+  >**nn**
+  >The application times out for the purposes of rebalancing in a uniform cluster after a period of nn seconds.
+  >nn can be between 1 and 9999999999
+  >
+  > **Programmatic Access**
+  
 - [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms) — inspect `BALANCED` / `MOVCOUNT` per application.
 <!-- - [`AutoCluster` stanza (qm.ini)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=file-autocluster-stanza-qmini) — the uniform-cluster configuration used in the node `qm.ini` files. -->
 
