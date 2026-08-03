@@ -799,14 +799,23 @@ Real example — 16 instances fully balanced (`BALANCED(YES)`, 8 per queue manag
 while 7 of 8 instances on QM2 were `MOVABLE(NO)` at that instant:
 
 ```
-=== Cluster summary ===
-   APPLNAME(jack)  CLUSTER(UNIQA)  COUNT(16)  MOVCOUNT(11)  BALANCED(YES)
-   ACTIVE(YES)  COUNT(8)  MOVCOUNT(3)  BALSTATE(OK)  QMNAME(QM1)
-   ACTIVE(YES)  COUNT(8)  MOVCOUNT(8)  BALSTATE(OK)  QMNAME(QM2)
+=== Cluster summary (jack) ===
+Cluster UNIQA   count=16  movcount=11  balanced=YES
+
+QMgr  Count  MovCount  BalState  Active  LastMsg
+----  -----  --------  --------  ------  -------------------
+QM1   8      3         OK        YES     2026-08-03 04.00.20
+QM2   8      8         OK        YES     2026-08-03 03.59.43
+
 === QM2 local eligibility ===   (7 of 8 not movable, yet balanced)
    IMMREASN(INTRANS)  MOVABLE(NO)    x7
    IMMREASN(NONE)     MOVABLE(YES)   x1
 ```
+
+> `MovCount` is the `MOVCOUNT` field — the cluster's over-time movability tally, **not**
+> the instantaneous `MOVABLE` flag. Here QM2 reads `MovCount 8` while 7 of its 8 instances
+> show `MOVABLE(NO)` in the snapshot below: the two are different views, which is exactly
+> the point of this section.
 
 So don't read a snapshot full of `MOVABLE(NO)` as "stuck" — check `BALANCED` and the
 per-QM `COUNT` instead. If connections really are pinned to one queue manager and
@@ -839,7 +848,25 @@ echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM" | runmqsc QM1
 |---|---|---|
 | `NONE` | `YES` | At a boundary, ready to move. |
 | `INTRANS` | `NO` | In a unit of work. The async JMS `MessageListener` keeps a syncpoint GET armed for the next delivery, so its consumer connection reads `INTRANS` **even when the queue is empty** (`CURDEPTH(0)`, `UNCOM(NO)`). This is normal and does **not** block balancing — the move happens at the next delivery boundary. |
-| `NOTRECONN` | `NO` | Reconnect disabled on that connection, so the cluster can never move it. In this demo these are the one-shot `/api/info` probe connections (their factory sets `WMQ_CLIENT_RECONNECT_DISABLED`); they sit out of balancing by design. |
+| `NOTRECONN` | `NO` | Reconnect disabled on that connection, so the cluster can never move it. In this demo these are the one-shot `/api/info` probe connections (their factory sets `WMQ_CLIENT_RECONNECT_DISABLED`); they sit out of balancing by design. They connect under a **separate app name** (see below), so they no longer appear under the workload tag. |
+
+**Probe connections use a separate app name.** The `/api/info` connectivity probe deliberately
+disables client reconnect (it must fail fast, not retry a down queue manager), so its connections
+are permanently `MOVABLE(NO) IMMREASN(NOTRECONN)`. If they shared the workload's application name
+they would show up as permanently-unmovable rows under it and skew `MOVCOUNT` — making a healthy
+app look partly stuck. To keep the balancing view clean, `probeConnectionFactory()` sets its
+`WMQ_APPLICATIONNAME` to **`<app-name>-probe`** (e.g. `all-in-one` → `all-in-one-probe`), overriding
+the base name applied to every factory. The workload and its probes are then separate APSTATUS apps:
+
+```bash
+# Workload only — no NOTRECONN noise:
+echo "DIS APSTATUS('all-in-one') TYPE(APPL)"       | runmqsc QM1
+# The probe connections, if you want to see them:
+echo "DIS APSTATUS('all-in-one-probe') TYPE(APPL)" | runmqsc QM1
+```
+
+> `WMQ_APPLICATIONNAME` (the APSTATUS `APPLTAG`) caps at **28 characters** — keep the base
+> `ibm.mq.application-name` short enough that the `-probe` suffix still fits.
 
 ### Delivery mode and syncpoint (at-most-once vs at-least-once)
 
