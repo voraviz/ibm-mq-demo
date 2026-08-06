@@ -6,12 +6,29 @@
         "connection": [
           {"host": "mq-node-1", "port": 1414},
           {"host": "mq-node-2", "port": 1414},
-          {"host": "mq-node-3", "port": 1414},
+          {"host": "mq-node-3", "port": 1414}
+        ],
+        "queueManager": "UNIQA"
+      },
+      "connectionManagement": {
+        "clientWeight": 1,
+        "affinity": "none"
+      },
+      "type": "clientConnection"
+    },
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
           {"host": "mq-node-4", "port": 1414},
           {"host": "mq-node-5", "port": 1414},
           {"host": "mq-node-6", "port": 1414}
         ],
         "queueManager": "UNIQA"
+      },
+      "connectionManagement": {
+        "clientWeight": 1,
+        "affinity": "none"
       },
       "type": "clientConnection"
     },

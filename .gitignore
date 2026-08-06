@@ -1,5 +1,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=java,go,node,osx
 plan/*
+.idea
+.ai
 .vscode
 .gitignore
 .java-version

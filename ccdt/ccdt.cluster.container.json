@@ -6,12 +6,29 @@
         "connection": [
           {"host": "host.containers.internal", "port": 1414},
           {"host": "host.containers.internal", "port": 1415},
-          {"host": "host.containers.internal", "port": 1416},
+          {"host": "host.containers.internal", "port": 1416}
+        ],
+        "queueManager": "UNIQA"
+      },
+      "connectionManagement": {
+        "clientWeight": 1,
+        "affinity": "none"
+      },
+      "type": "clientConnection"
+    },
+    {
+      "name": "DEV.APP.SVRCONN",
+      "clientConnection": {
+        "connection": [
           {"host": "host.containers.internal", "port": 1417},
           {"host": "host.containers.internal", "port": 1418},
           {"host": "host.containers.internal", "port": 1419}
         ],
         "queueManager": "UNIQA"
+      },
+      "connectionManagement": {
+        "clientWeight": 1,
+        "affinity": "none"
       },
       "type": "clientConnection"
     },
