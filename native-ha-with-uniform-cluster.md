@@ -822,6 +822,38 @@ per-QM `COUNT` instead. If connections really are pinned to one queue manager an
 never move, the cause is almost always the **cluster itself** (a queue manager not
 joined, wrong channel/CCDT), not the application.
 
+**The `APSTATUS` hierarchy — three zoom levels.** [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms)
+takes a `TYPE` that selects how far down you drill, from the whole cluster to a single queue
+manager's instances:
+
+| `TYPE` | Scope | Answers | Key fields |
+|---|---|---|---|
+| `TYPE(APPL)` | **Cluster-wide** roll-up | Is this app balanced across the cluster? | `COUNT`, `MOVCOUNT`, `BALANCED` |
+| `TYPE(QMGR)` | **Per queue manager** | How many instances sit on each QM? | `QMNAME`, `COUNT`, `MOVCOUNT`, `BALSTATE` |
+| `TYPE(LOCAL)` | **Instances on the QM you query** | Why is each local instance movable or not? | `MOVABLE`, `IMMREASN`, `CONNTAG` |
+
+> All three are reported by the queue manager you run the command against. `TYPE(APPL)` is a
+> genuine cluster-wide aggregate (any QM answers it identically); `TYPE(QMGR)` and `TYPE(LOCAL)`
+> report only what that QM knows about its own instances.
+
+Below `APSTATUS` sits [`DISPLAY CONN`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-conn-display-connection-information),
+a **different command** that inspects the physical connection (channel, open handles, in-flight
+UOW) rather than balancing state. The bridge between them is `CONNTAG`: `TYPE(LOCAL)` gives you a
+connection's `CONNTAG`, which you feed into `DIS CONN` to diagnose that one connection:
+
+```bash
+# APSTATUS TYPE(LOCAL) surfaces the CONNTAG; drill into that single connection with DIS CONN:
+echo "DIS CONN(*) TYPE(CONN) WHERE(CONNTAG EQ 'MQCT...QM1_2026-08-06_12.26.42jack') ALL" | runmqsc QM1
+```
+
+> `TYPE(CONN)` is the default for `DIS CONN`; use `TYPE(HANDLE)` to list the queues/objects that
+> connection has open, or `TYPE(*)` for both. One `CONNTAG` matches one physical connection — but
+> a single app instance opening multiple connections shares the tag, so several `CONN(...)` rows
+> back is expected.
+
+So the full drill-down is **APPL → QMGR → LOCAL** (balancing view via `APSTATUS`), then
+**`DIS CONN` by `CONNTAG`** for per-connection diagnostics. The commands below walk exactly that path.
+
 **Commands to investigate, from broad to specific:**
 
 ```bash
