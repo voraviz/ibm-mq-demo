@@ -51,16 +51,29 @@ while true; do
     QM1_ACTIVE_NODE=$(get_active_node mq-node-1)
     QM2_ACTIVE_NODE=$(get_active_node mq-node-4)
 
-    QM1_CONN=$(count_connections "$QM1_ACTIVE_NODE" QM1)
-    QM2_CONN=$(count_connections "$QM2_ACTIVE_NODE" QM2)
+    QM1_CONN=$([ -n "$QM1_ACTIVE_NODE" ] && count_connections "$QM1_ACTIVE_NODE" QM1 || echo "n/a")
+    QM2_CONN=$([ -n "$QM2_ACTIVE_NODE" ] && count_connections "$QM2_ACTIVE_NODE" QM2 || echo "n/a")
+
+    # The APSTATUS TYPE(APPL) roll-up is cluster-wide — any reachable QM answers
+    # it. Prefer QM1, fall back to QM2 so the summary survives QM1 being down.
+    if [ -n "$QM1_ACTIVE_NODE" ]; then
+        SUMMARY_NODE="$QM1_ACTIVE_NODE"; SUMMARY_QM=QM1
+    elif [ -n "$QM2_ACTIVE_NODE" ]; then
+        SUMMARY_NODE="$QM2_ACTIVE_NODE"; SUMMARY_QM=QM2
+    else
+        SUMMARY_NODE=""; SUMMARY_QM=""
+    fi
 
     clear
     echo "=== Cluster summary ($APPLTAG) ==="
     # runmqsc emits multi-column KEY(VALUE) records; parse them into an aligned
     # table so the cluster-wide TYPE(APPL) roll-up and the per-QM TYPE(QMGR) rows
     # are readable at a glance. Records are separated by the AMQ8932I header line.
-    "$CONTAINER_ENGINE" exec "$QM1_ACTIVE_NODE" \
-        bash -c "printf '%s\n' \"DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)\" \"DISPLAY APSTATUS('$APPLTAG') TYPE(QMGR)\" | runmqsc QM1" \
+    if [ -z "$SUMMARY_NODE" ]; then
+        echo "No queue manager reachable — cannot query cluster summary."
+    else
+    "$CONTAINER_ENGINE" exec "$SUMMARY_NODE" \
+        bash -c "printf '%s\n' \"DISPLAY APSTATUS('$APPLTAG') TYPE(APPL)\" \"DISPLAY APSTATUS('$APPLTAG') TYPE(QMGR)\" | runmqsc $SUMMARY_QM" \
         | awk '
             /APSTATUS/ { next }            # skip echoed command lines
             /AMQ8932I/ { flush(); next }   # record boundary
@@ -96,6 +109,7 @@ while true; do
                     printf "%-5s %-6s %-8s %-9s %-7s %s %s\n", q_nm[i], q_ct[i], q_mv[i], q_st[i], q_ac[i], q_dt[i], q_tm[i]
             }
         '
+    fi
     echo ""
 
     if [ "$SHOW_LOCAL" = "1" ]; then
