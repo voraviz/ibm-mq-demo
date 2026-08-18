@@ -16,7 +16,7 @@
 
 This repository includes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/introduction) server that lets an AI assistant — such as [IBM Bob](https://www.ibm.com/products/bob) — query and administer IBM MQ queue managers using natural language.
 
-The MCP server is located in the [`mq-mcp-server/`](mq-mcp-server/) directory. Full setup instructions are in [`mq-mcp-server/README.md`](mq-mcp-server/README.md).
+The MCP server source code is at **https://github.com/voraviz/mq-mcp-server** and is also included in this repository under [`mq-mcp-server/`](mq-mcp-server/). Full setup instructions are in [`mq-mcp-server/README.md`](mq-mcp-server/README.md).
 
 ---
 
@@ -230,5 +230,7 @@ All 16 workload connections automatically failed over to QM2 thanks to `MQCNO_RE
    ```
 
 3. Ask Bob anything about your MQ environment.
+
+→ Source code: **[github.com/voraviz/mq-mcp-server](https://github.com/voraviz/mq-mcp-server)**
 
 → Full setup guide: **[mq-mcp-server/README.md](mq-mcp-server/README.md)**
