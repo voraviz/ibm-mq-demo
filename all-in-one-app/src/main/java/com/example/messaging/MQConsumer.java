@@ -96,8 +96,13 @@ public class MQConsumer {
 
     // ── private ──────────────────────────────────────────────────────────────
 
-    /** Async delivery callback — acknowledged automatically when it returns. */
+    /**
+     * Async delivery callback. In AUTO_ACKNOWLEDGE mode the message is
+     * acknowledged automatically when this returns; in transacted mode we
+     * commit on success and roll back on error so the message is redelivered.
+     */
     private void onMessage(Message msg) {
+        boolean transacted = config.transacted();
         try {
             if (msg instanceof TextMessage textMsg) {
                 String text = textMsg.getText();
@@ -107,8 +112,18 @@ public class MQConsumer {
             } else {
                 LOG.warnf("Ignoring non-text message of type: %s", msg.getClass().getName());
             }
-        } catch (JMSException e) {
+            if (transacted) {
+                jmsSession.commit();
+            }
+        } catch (Exception e) {
+            // Catch Exception, not just JMSException: an unchecked error from broadcast()
+            // must still roll back so the message is redelivered rather than lost.
             LOG.error("Error handling MQ message", e);
+            if (transacted) {
+                try { jmsSession.rollback(); } catch (JMSException re) {
+                    LOG.error("Transaction rollback failed", re);
+                }
+            }
         }
     }
 
@@ -157,7 +172,9 @@ public class MQConsumer {
     private void openJmsResources() throws JMSException {
         jmsConnection = connectionFactory.createConnection();
         jmsConnection.setExceptionListener(this::onException);
-        jmsSession = jmsConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+        boolean transacted = config.transacted();
+        jmsSession = jmsConnection.createSession(
+                transacted, transacted ? Session.SESSION_TRANSACTED : Session.AUTO_ACKNOWLEDGE);
         Queue queue = jmsSession.createQueue(config.queue());
         jmsConsumer = jmsSession.createConsumer(queue);
         jmsConsumer.setMessageListener(this::onMessage);

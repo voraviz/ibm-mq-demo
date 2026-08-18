@@ -6,7 +6,10 @@ DEFINE CHANNEL('DEV.APP.SVRCONN') CHLTYPE(SVRCONN) TRPTYPE(TCP) MCAUSER('app') R
 * ================================================
 * Queues
 * ================================================
-DEFINE QLOCAL('DEV.DEMO.QL.IN') DEFPSIST(YES) REPLACE
+* BOTHRESH + BOQNAME give transacted consumers a poison-message escape: after 5
+* failed redeliveries MQ moves the message to the backout queue instead of looping forever.
+DEFINE QLOCAL('DEV.DEMO.QL.IN') DEFPSIST(YES) BOTHRESH(5) BOQNAME('DEV.DEMO.QL.BACKOUT') REPLACE
+DEFINE QLOCAL('DEV.DEMO.QL.BACKOUT') DEFPSIST(YES) REPLACE
 DEFINE QLOCAL('DEV.DEMO.QL.OUT') DEFPSIST(YES) REPLACE
 DEFINE QLOCAL('DEV.DEMO.QL.DEAD') DEFPSIST(YES) REPLACE
 

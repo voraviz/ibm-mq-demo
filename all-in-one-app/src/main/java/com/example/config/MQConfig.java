@@ -22,6 +22,11 @@ public interface MQConfig {
     @WithName("balancing-timeout")
     OptionalInt balancingTimeout();
 
+    /** When true the consumer session is transacted (manual commit/rollback);
+     *  when false it uses AUTO_ACKNOWLEDGE. Defaults to false. */
+    @WithDefault("false")
+    boolean transacted();
+
     @WithDefault("")
     String channel();
 

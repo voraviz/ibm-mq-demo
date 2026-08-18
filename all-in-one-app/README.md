@@ -122,6 +122,29 @@ share the same target/credentials but differ in reconnect policy:
 | default `connectionFactory()` | consumer + outbound producer | `WMQ_CLIENT_RECONNECT`, 30s timeout — long-lived connections survive QM outages |
 | `@ProbeConnection` factory | `/api/info` only | `WMQ_CLIENT_RECONNECT_DISABLED` — a point-in-time probe that fails fast |
 
+### Consumer delivery mode
+
+```properties
+ibm.mq.transacted=true   # default false
+```
+
+Controls the consumer JMS session:
+
+- `false` (default) — `AUTO_ACKNOWLEDGE`. The message is acked when `onMessage()` returns.
+- `true` — `SESSION_TRANSACTED`. The consumer `commit()`s after a successful broadcast and
+  `rollback()`s on any handling error, so the message is redelivered instead of lost.
+
+| Mode | Guarantee |
+|---|---|
+| `transacted=false` (auto-ack) | at-most-once for handling errors (message can be lost) |
+| `transacted=true` | **at-least-once** (message never lost, may duplicate) |
+| exactly-once | not available from the toggle — needs an idempotent consumer or XA + dedup |
+
+> **⚠️ `transacted=true` needs a backout threshold on the queue.** Rollback-on-error redelivers a
+> poison message forever; `DEV.DEMO.QL.IN` sets `BOTHRESH(5) BOQNAME('DEV.DEMO.QL.BACKOUT')` so MQ
+> moves it aside after 5 attempts. At-least-once also means the WebSocket fan-out must tolerate
+> **duplicate** deliveries.
+
 ### Outbound messaging channel
 
 ```properties
