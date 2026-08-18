@@ -6,9 +6,9 @@ This repository demonstrates IBM MQ capabilities across three areas:
 |---|---|---|
 | **Native HA** | [native-ha.md](native-ha.md) | ✅ Available |
 | **Native HA + Uniform Cluster** | [native-ha-with-uniform-cluster.md](native-ha-with-uniform-cluster.md) | ✅ Available |
-| **Observability** | [metrics-and-otel.md](Metrics-and-OTEL.md) | ✅ Available|
+| **Observability** | [Metrics-and-OTEL.md](Metrics-and-OTEL.md) | ✅ Available|
 | **Security (SBOM & scanning)** | [SECURITY.md](SECURITY.md) | ✅ Available |
-<!-- | **Observability** | [metrics-and-otel.md](Metrics-and-OTEL.md) | 🚧 Work in progress (You can try)| -->
+| **MQ MCP Server** | [MCP.md](MCP.md) | ✅ Available |
 
 ---
 
@@ -17,6 +17,7 @@ This repository demonstrates IBM MQ capabilities across three areas:
 ```
 ibm-mq-demo/
 ├── mq-native-ha/         # MQ Native HA container configs (ini + MQSC)
+├── mq-mcp-server/        # MCP server exposing MQ REST API as AI tools
 ├── all-in-one-app/       # Quarkus/JMS + Vue.js all-in-one app (Java)
 ├── api-app-go-jms20/     # Go REST API backend using mq-golang-jms20
 ├── ui-app/               # Vue 3 + Vite frontend (pairs with api-app-go)
@@ -24,11 +25,12 @@ ibm-mq-demo/
 ├── etc/                  # Prometheus/Grafana/Jaeger configs + startup scripts
 ├── native-ha.md                        # Native HA setup and failover walkthrough
 ├── native-ha-with-uniform-cluster.md   # Native HA + Uniform Cluster walkthrough
+├── MCP.md                              # MQ MCP server overview and usage examples
 ├── ccdt/                 # CCDT JSON files (nativeha + cluster)
 ├── Metrics-and-OTEL.md   # Observability guide
 ├── SECURITY.md           # SBOM & vulnerability scanning
 ├── scan-sbom.sh          # syft SBOM + grype/trivy scan (any app)
-├── create-cluster.sh     # create 2 Native HA group with Uniform Cluster 
+├── create-cluster.sh     # create 2 Native HA group with Uniform Cluster
 ├── create-nativeha.sh    # create 1 Native HA group with MQ Exporter
 └── README.md
 ```
@@ -67,3 +69,11 @@ SBOM generation and vulnerability scanning (syft + grype + trivy) via
 [`scan-sbom.sh`](scan-sbom.sh), and why both scanners are run.
 
 → See **[SECURITY.md](SECURITY.md)**
+
+---
+
+## MQ MCP Server
+
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/introduction) server that lets an AI assistant query and administer IBM MQ using natural language. Supports multiple mqweb endpoints for Native HA + Uniform Cluster environments, with parallel discovery and automatic failover.
+
+→ See **[MCP.md](MCP.md)**
