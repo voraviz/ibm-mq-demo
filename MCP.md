@@ -10,6 +10,7 @@
     - [Check Native HA status](#check-native-ha-status)
     - [Check uniform cluster balance](#check-uniform-cluster-balance)
     - [Check queue depth](#check-queue-depth)
+    - [Check cluster channels](#check-cluster-channels)
     - [Failover scenario](#failover-scenario)
   - [Connecting to IBM Bob](#connecting-to-ibm-bob)
 
@@ -162,6 +163,23 @@ Bob runs `DISPLAY QLOCAL(*) MAXDEPTH CURDEPTH` and ranks results:
 |---|---|---|
 | `DEV.DEMO.QL.IN` | **100** | 5,000 |
 | `AMQ.6A7ED3C225049202` | 13 | 5,000 |
+
+---
+
+### Check cluster channels
+
+> **"Check channel that QM1 talks to QM2 and vice versa"**
+
+Bob runs `DISPLAY CHSTATUS(*) STATUS SUBSTATE MSGS LSTMSGDA LSTMSGTI RQMNAME CONNAME CHLTYPE` on both QMs and reports:
+
+| Channel | Type | Direction | Remote QM | Remote IP | Messages | Status |
+|---|---|---|---|---|---|---|
+| `UNIQA_QM2` (on QM1) | CLUSSDR | QM1 → QM2 | `QM2` | `10.89.0.17:1414` | 92 | ✅ RUNNING |
+| `UNIQA_QM1` (on QM1) | CLUSRCVR | QM2 → QM1 | `QM2` | `10.89.0.17` | 92 | ✅ RUNNING |
+| `UNIQA_QM1` (on QM2) | CLUSSDR | QM2 → QM1 | `QM1` | `10.89.0.14:1414` | 92 | ✅ RUNNING |
+| `UNIQA_QM2` (on QM2) | CLUSRCVR | QM1 → QM2 | `QM1` | `10.89.0.14` | 92 | ✅ RUNNING |
+
+✅ **All 4 cluster channels running** — bidirectional communication between QM1 and QM2 is fully operational.
 
 ---
 
