@@ -20,7 +20,6 @@ if [ "$CONTAINER_ENGINE" = "docker" ]; then
 else
     CCDT_FILE=${CCDT_FILE:-./ccdt/ccdt.cluster.container.json}
 fi
-
 QUARKUS_HTTP_PORT=9190
 APP_INSTANCE_COUNT=${APP_INSTANCE_COUNT:-6}
 MAX_PORT=$(expr "$QUARKUS_HTTP_PORT" + "$APP_INSTANCE_COUNT")
