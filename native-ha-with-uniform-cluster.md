@@ -874,6 +874,45 @@ echo "DIS CONN(*) WHERE(APPLTAG EQ 'jack') TYPE(HANDLE) OBJNAME OPENOPTS" | runm
 echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM" | runmqsc QM1
 ```
 
+**Reading `UOWSTATE` (connection view) and `CURDEPTH` / `UNCOM` (queue view).**
+These two commands look at the same unit of work from opposite ends — the connection
+that owns it, and the queue it touches.
+
+[`DIS CONN … UOWSTATE`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-conn-display-connection-information)
+reports whether that HCONN currently has an in-flight transaction:
+
+| `UOWSTATE` | Meaning |
+|---|---|
+| `NONE` | No open unit of work — the connection is at a boundary (committed). Movable. |
+| `ACTIVE` | An uncommitted unit of work is open on this HCONN — a `GET`/`PUT` under syncpoint awaits `commit()`/`rollback()`. Shows as `IMMREASN(INTRANS) MOVABLE(NO)`. |
+
+[`DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-qstatus-display-queue-status)
+reports the same work from the queue's side:
+
+| Field | Meaning |
+|---|---|
+| `CURDEPTH` | Messages currently on the queue (committed **and** uncommitted are counted). |
+| `UNCOM(YES)` | At least one **uncommitted** change exists under syncpoint on this queue — an in-flight `GET` (transacted consume, not yet committed) or `PUT` (not yet committed). |
+| `UNCOM(NO)` | No pending syncpoint work — everything on the queue is committed. |
+
+**How they line up.** A transacted consume removes the message from the queue *provisionally*:
+until `commit()`, the connection reads `UOWSTATE(ACTIVE)` and the queue reads `UNCOM(YES)`. On
+`commit()` the message is gone for good and both clear (`NONE` / `UNCOM(NO)`); on `rollback()` (or
+a crash) the message returns to the queue and is redelivered — this is the at-least-once guarantee
+transacted mode buys.
+
+```bash
+# Correlate both views for the workload tag:
+echo "DIS CONN(*) WHERE(APPLTAG EQ 'jack') UOWSTATE"     | runmqsc QM1   # ACTIVE = open UOW
+echo "DIS QSTATUS(DEV.DEMO.QL.IN) CURDEPTH UNCOM"        | runmqsc QM1   # UNCOM(YES) = pending
+```
+
+> **Caveat — this does not prove `transacted=true`.** The Java async listener uses a syncpoint GET
+> even in the default `AUTO_ACKNOWLEDGE` mode, so `UOWSTATE(ACTIVE)` and `IMMREASN(INTRANS)` appear
+> either way. The difference is *duration*: committing per message (both auto-ack and the transacted
+> consumer do) keeps the UOW open only briefly, so you rarely catch `UNCOM(YES)`. You only see
+> `UNCOM(YES)` persist if a transaction batches several messages or stalls before committing.
+
 **`IMMREASN` values seen in this demo:**
 
 | `IMMREASN` | `MOVABLE` | Meaning |
