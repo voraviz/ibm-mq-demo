@@ -1033,6 +1033,7 @@ IBM MQ 9.4.x documentation:
   > **Programmatic Access**
   
 - [`DISPLAY APSTATUS`](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=reference-display-apstatus-display-application-status-multiplatforms) — inspect `BALANCED` / `MOVCOUNT` per application.
+- [Suspending a queue manager from a uniform cluster](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=cluster-suspending-queue-manager-from-uniform)
 <!-- - [`AutoCluster` stanza (qm.ini)](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=file-autocluster-stanza-qmini) — the uniform-cluster configuration used in the node `qm.ini` files. -->
 
 <!-- - [Native HA](https://www.ibm.com/docs/en/ibm-mq/9.4.x?topic=multiplatforms-native-ha) — Raft-based high availability groups. -->
