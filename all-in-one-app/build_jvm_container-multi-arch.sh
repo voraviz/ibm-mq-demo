@@ -10,12 +10,20 @@ if [ $? -ne 0 ];
 then
    CONTAINER_RUNTIME=docker 
 fi
-$CONTAINER_RUNTIME manifest exists $IMAGE 
-if [ $? -eq 0 ];
+# $IMAGE may already exist locally either as a manifest list (from a prior
+# run of this script) or as a plain image (from a prior FAILED run, or an
+# unrelated single-arch build/tag reusing the same name) — `manifest exists`
+# only recognizes the former, so a stale plain image silently blocks
+# `manifest create` ("that name is already in use") without the guard ever
+# firing. Clear both possibilities unconditionally.
+$CONTAINER_RUNTIME rmi $IMAGE >/dev/null 2>&1
+$CONTAINER_RUNTIME manifest rm $IMAGE >/dev/null 2>&1
+$CONTAINER_RUNTIME manifest create $IMAGE
+if [ $? -ne 0 ];
 then
- $CONTAINER_RUNTIME manifest rm $IMAGE
+   echo "manifest create failed, aborting"
+   exit 1
 fi
-$CONTAINER_RUNTIME manifest create $IMAGE 
 echo "Build with Dockerfile.$DOCKERFILE tag $TAG"
 MVN_PROFILE=""
 if [ "$TAG" = "otel" ];
@@ -31,11 +39,13 @@ fi
 $CONTAINER_RUNTIME build --platform $PLATFORM  --manifest \
 $IMAGE -f src/main/docker/Dockerfile.$DOCKERFILE  .
 $CONTAINER_RUNTIME manifest push $IMAGE
-if [ $? -eq 0 ];
+if [ $? -ne 0 ];
 then
-    # Use `manifest inspect` (not `inspect`): `inspect` resolves a manifest to a
-    # single image — the host arch — so it always prints just arm64 here.
-    # `manifest inspect` lists every architecture actually in the manifest list.
-    ARCH=$($CONTAINER_RUNTIME manifest inspect ${CONTAINER_NAME}:${TAG} | jq -r '.manifests[].platform.architecture')
-    printf "${CONTAINER_NAME}:${TAG} architectures:\n%s\n" "$ARCH"
+    echo "manifest push failed, aborting"
+    exit 1
 fi
+# Verify against the registry (not local podman state) via skopeo --raw:
+# proves the push actually landed a multi-arch index, not just that the
+# local build succeeded.
+ARCH=$(skopeo inspect --raw docker://${CONTAINER_NAME}:${TAG} | jq -r '.manifests[].platform.architecture')
+printf "${CONTAINER_NAME}:${TAG} architectures (verified on registry):\n%s\n" "$ARCH"
