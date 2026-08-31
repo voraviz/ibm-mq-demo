@@ -40,6 +40,7 @@ do
     "$CONTAINER_ENGINE" run --name all-in-one-$QUARKUS_HTTP_PORT \
            --detach \
            --memory 300m \
+           --platform linux/amd64 \
            --network "$APP_NETWORK" \
            -v "$CCDT_FILE":/config/ccdt.json:ro \
            -e IBM_MQ_CCDT_URL="file:///config/ccdt.json" \
